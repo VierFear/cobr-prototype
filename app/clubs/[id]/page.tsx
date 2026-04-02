@@ -16,6 +16,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
   const { clubs, user, enroll, getUserEnrollments } = useApp()
   const [showEnrollForm, setShowEnrollForm] = useState(false)
   const [enrollSuccess, setEnrollSuccess] = useState(false)
+  const [activeTab, setActiveTab] = useState<'description' | 'schedule' | 'materials'>('description')
   const [formData, setFormData] = useState({
     childName: '',
     childAge: '',
@@ -95,83 +96,96 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className="flex flex-col gap-4 p-4">
-          {/* Description */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">О клубе</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-pretty text-sm text-muted-foreground">{club.fullDescription}</p>
-            </CardContent>
-          </Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground">Расписание</p>
+                <p className="text-sm font-medium text-foreground">{club.schedule}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <User className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground">Руководитель</p>
+                <p className="text-sm font-medium text-foreground">{club.leader}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Phone className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground">Контакт</p>
+                <p className="text-sm font-medium text-foreground">{club.leaderContact}</p>
+              </div>
+            </div>
+          </div>
 
-          {/* Schedule & Info */}
-          <Card>
-            <CardContent className="flex flex-col gap-3 pt-4">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Расписание</p>
-                  <p className="text-sm font-medium text-foreground">{club.schedule}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <User className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Руководитель</p>
-                  <p className="text-sm font-medium text-foreground">{club.leader}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Контакт</p>
-                  <p className="text-sm font-medium text-foreground">{club.leaderContact}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('description')}
+              className={`rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium ${activeTab === 'description' ? 'border-[#0057B8] text-[#0057B8]' : 'border-transparent text-muted-foreground'}`}
+            >
+              Описание
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('schedule')}
+              className={`rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium ${activeTab === 'schedule' ? 'border-[#0057B8] text-[#0057B8]' : 'border-transparent text-muted-foreground'}`}
+            >
+              Расписание
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('materials')}
+              className={`rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium ${activeTab === 'materials' ? 'border-[#0057B8] text-[#0057B8]' : 'border-transparent text-muted-foreground'}`}
+            >
+              Материалы
+            </button>
+          </div>
 
-          {/* Lessons */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Расписание занятий</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {club.lessons && club.lessons.length > 0 ? (
-                <ul className="space-y-2">
-                  {club.lessons.map((lesson) => (
-                    <li key={lesson.id} className="rounded border border-border p-2">
-                      <p className="text-sm font-medium">{lesson.date} {lesson.time}</p>
-                      <p className="text-xs text-muted-foreground">{lesson.topic}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Занятия ещё не добавлены.</p>
+          <Card className="rounded-b-lg rounded-t-none">
+            <CardContent className="p-4">
+              {activeTab === 'description' && (
+                <p className="text-sm text-muted-foreground">
+                  {club.fullDescription || club.description}
+                </p>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Materials */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Материалы</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {club.materials && club.materials.length > 0 ? (
-                <ul className="space-y-2">
-                  {club.materials.map((material) => (
-                    <li key={material.id} className="flex items-center justify-between rounded border border-border p-2">
-                      <a href={material.url} target="_blank" rel="noreferrer" className="text-sm text-primary underline">
-                        {material.title}
-                      </a>
-                      <span className="text-xs text-muted-foreground">{material.type ?? 'other'}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">Материалы пока не добавлены.</p>
+              {activeTab === 'schedule' && (
+                <div>
+                  {(club.lessons && club.lessons.length > 0) ? (
+                    <ul className="space-y-2">
+                      {club.lessons.map((lesson) => (
+                        <li key={lesson.id} className="rounded border border-border p-3">
+                          <p className="text-sm font-medium">{lesson.date} • {lesson.time}</p>
+                          <p className="text-xs text-muted-foreground">{lesson.topic}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Занятия ещё не добавлены.</p>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'materials' && (
+                <div>
+                  {(club.materials && club.materials.length > 0) ? (
+                    <ul className="space-y-2">
+                      {club.materials.map((material) => (
+                        <li key={material.id} className="rounded border border-border p-3">
+                          <a href={material.url} target="_blank" rel="noreferrer" className="text-sm text-primary underline">
+                            {material.title}
+                          </a>
+                          <p className="text-xs text-muted-foreground">{material.type ?? 'other'}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Материалы пока не добавлены.</p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

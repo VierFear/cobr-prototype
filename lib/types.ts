@@ -24,7 +24,7 @@ export interface Club {
   leaderContact: string
   image: string
   logo?: string
-  materials: ClubMaterialItem[]
+  materials?: ClubMaterialItem[]
   lessons?: ClubScheduleItem[]
 }
 

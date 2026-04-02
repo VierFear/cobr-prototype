@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { MobileLayout } from '@/components/mobile-layout'
 import { ClubCard } from '@/components/club-card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useApp } from '@/lib/context'
-import { CategoryFilter } from '@/lib/types'
+import { CategoryFilter, Club } from '@/lib/types'
 import { Search, SlidersHorizontal } from 'lucide-react'
 
 const categories: { value: CategoryFilter; label: string }[] = [
