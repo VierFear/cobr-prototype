@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Nunito } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { AppProvider } from '@/lib/context'
+import AppProvider from '@/lib/context'
 import './globals.css'
 
 const nunito = Nunito({ 

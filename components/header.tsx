@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, User, Shield } from 'lucide-react'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
 interface HeaderProps {
@@ -12,18 +13,49 @@ interface HeaderProps {
 }
 
 export function Header({ title, showBack = false, backHref = '/' }: HeaderProps) {
-  const { user } = useApp()
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [avatar, setAvatar] = useState<string | null>(null)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        setIsLoggedIn(true)
+        
+        const { data: userData } = await supabase
+          .from('users')
+          .select('is_admin, avatar')
+          .eq('id', user.id)
+          .single()
+        
+        setIsAdmin(userData?.is_admin || false)
+        setAvatar(userData?.avatar || null)
+      } else {
+        setIsLoggedIn(false)
+        setIsAdmin(false)
+        setAvatar(null)
+      }
+    }
+    
+    checkAuth()
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      checkAuth()
+    })
+    
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
 
   return (
     <header className="fixed left-0 right-0 top-0 z-50 border-b border-border bg-card">
       <div className="mx-auto flex h-16 max-w-[390px] items-center justify-between px-4">
         {showBack ? (
           <Link href={backHref}>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-foreground"
-            >
+            <Button variant="ghost" size="icon" className="text-foreground">
               <ArrowLeft className="h-5 w-5" />
               <span className="sr-only">Назад</span>
             </Button>
@@ -35,7 +67,9 @@ export function Header({ title, showBack = false, backHref = '/' }: HeaderProps)
                 src="/logo.svg"
                 alt="ЦОБР логотип"
                 className="h-full w-full object-cover"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://via.placeholder.com/36?text=ЦР' }}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = 'https://via.placeholder.com/36?text=ЦР'
+                }}
               />
             </div>
             <span className="text-lg font-bold text-foreground">ЦОБР</span>
@@ -49,7 +83,7 @@ export function Header({ title, showBack = false, backHref = '/' }: HeaderProps)
         )}
 
         <div className="flex items-center gap-2">
-          {user?.isAdmin && (
+          {isAdmin && (
             <Link href="/admin">
               <Button variant="ghost" size="icon" className="text-primary">
                 <Shield className="h-5 w-5" />
@@ -57,12 +91,12 @@ export function Header({ title, showBack = false, backHref = '/' }: HeaderProps)
               </Button>
             </Link>
           )}
-          <Link href={user ? '/profile' : '/login'}>
+          <Link href={isLoggedIn ? '/profile' : '/login'}>
             <Button variant="ghost" size="icon" className="text-foreground">
-              {user ? (
+              {avatar ? (
                 <img 
-                  src={user.avatar} 
-                  alt={user.name}
+                  src={avatar} 
+                  alt="Аватар"
                   className="h-8 w-8 rounded-full object-cover"
                 />
               ) : (
