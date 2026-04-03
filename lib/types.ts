@@ -13,15 +13,15 @@ export interface ClubMaterialItem {
 }
 
 export interface Club {
-  id: string
+  id: number  // в БД SERIAL → number
   name: string
   description: string
-  fullDescription: string
+  full_description: string   // ← было fullDescription
   category: 'drones' | 'modeling' | '3d'
-  ageGroup: string
+  age_group: string          // ← было ageGroup
   schedule: string
   leader: string
-  leaderContact: string
+  leader_contact: string     // ← было leaderContact
   image: string
   logo?: string
   materials?: ClubMaterialItem[]
@@ -33,22 +33,22 @@ export interface User {
   name: string
   email: string
   phone: string
-  password: string
+  // password: string  // ← пароль НЕ должен быть в этом типе (удали)
   avatar: string
-  isAdmin: boolean
+  is_admin: boolean        // ← было isAdmin
   bio?: string
 }
 
 export interface Enrollment {
   id: string
-  userId: string
-  clubId: string
-  childName: string
-  childAge: number
-  parentPhone: string
+  user_id: string          // ← было userId
+  club_id: string          // ← было clubId
+  child_name: string       // ← было childName
+  child_age: number        // ← было childAge
+  parent_phone: string     // ← было parentPhone
   comment: string
   status: 'pending' | 'accepted' | 'completed'
-  createdAt: string
+  created_at: string       // ← было createdAt
 }
 
 export type CategoryFilter = 'all' | 'drones' | 'modeling' | '3d'

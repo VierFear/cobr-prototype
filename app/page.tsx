@@ -1,30 +1,79 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { MobileLayout } from '@/components/mobile-layout'
 import { ClubCard } from '@/components/club-card'
 import { Button } from '@/components/ui/button'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { ChevronRight } from 'lucide-react'
+import type { Club } from '@/lib/types'
 
 export default function HomePage() {
-  const { user, clubs } = useApp()
+  const [clubs, setClubs] = useState<Club[]>([])
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      
+      // 1. Получаем текущего пользователя
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      setUser(currentUser)
+
+      // 2. Получаем клубы из Supabase
+      const { data: clubsData, error } = await supabase
+        .from('clubs')
+        .select('*')
+        .limit(3)
+      
+      if (error) {
+        console.error('Ошибка загрузки клубов:', error)
+        setClubs([])
+      } else {
+        setClubs(clubsData || [])
+      }
+      
+      setLoading(false)
+    }
+
+    fetchData()
+  }, [])
+
   const featuredClubs = clubs.slice(0, 3)
+
+  if (loading) {
+    return (
+      <MobileLayout>
+        <div className="flex justify-center items-center h-64">
+          <p>Загрузка...</p>
+        </div>
+      </MobileLayout>
+    )
+  }
+
+  const getUserName = () => {
+    if (!user) return null
+    const fullName = user.user_metadata?.full_name || user.user_metadata?.name
+    if (fullName) return fullName.split(' ')[0]
+    return user.email?.split('@')[0] || 'Пользователь'
+  }
+
+  const userName = getUserName()
 
   return (
     <MobileLayout>
       <div className="flex flex-col gap-6 p-4">
-        {/* Welcome Section */}
         <section className="text-center">
           <h1 className="text-balance text-2xl font-bold text-foreground">
-            {user ? `Привет, ${user.name.split(' ')[0]}!` : 'Добро пожаловать в ЦОБР'}
+            {user ? `Привет, ${userName}!` : 'Добро пожаловать в ЦОБР'}
           </h1>
           <p className="mt-2 text-pretty text-sm text-muted-foreground">
             Центр общественного развития: клубы дронов и моделирования
           </p>
         </section>
 
-        {/* Hero Banner */}
         <section className="relative overflow-hidden rounded-2xl">
           <img
             src="https://images.unsplash.com/photo-1527977966376-1c8408f9f108?w=800&auto=format&fit=crop&q=80"
@@ -47,7 +96,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Featured Clubs */}
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">Популярные клубы</h2>
@@ -57,13 +105,18 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="flex flex-col gap-4">
-            {featuredClubs.map((club) => (
-              <ClubCard key={club.id} club={club} />
-            ))}
+            {featuredClubs.length > 0 ? (
+              featuredClubs.map((club) => (
+                <ClubCard key={club.id} club={club} />
+              ))
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                Нет клубов для отображения. Добавьте клубы в Supabase.
+              </p>
+            )}
           </div>
         </section>
 
-        {/* Quick Stats */}
         <section className="grid grid-cols-3 gap-3">
           <div className="flex flex-col items-center rounded-xl bg-primary/5 p-4">
             <span className="text-2xl font-bold text-primary">6+</span>
@@ -79,7 +132,6 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* CTA for non-logged users */}
         {!user && (
           <section className="rounded-xl bg-muted p-4 text-center">
             <h3 className="font-semibold text-foreground">Присоединяйтесь к нам!</h3>

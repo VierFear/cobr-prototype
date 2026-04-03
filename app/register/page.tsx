@@ -1,18 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register } = useApp()
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -23,6 +22,16 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/')
+      }
+    }
+    checkUser()
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,21 +49,51 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // 1. Регистрация в Supabase Auth
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        data: {
+          full_name: formData.name,
+          phone: formData.phone,
+        },
+      },
+    })
 
-    const success = register(
-      formData.name,
-      formData.email,
-      formData.phone,
-      formData.password
-    )
-
-    if (success) {
-      router.push('/')
-    } else {
-      setError('Пользователь с таким email уже существует')
+    if (signUpError) {
+      setError(signUpError.message)
+      setLoading(false)
+      return
     }
+
+    if (!authData.user) {
+      setError('Ошибка регистрации')
+      setLoading(false)
+      return
+    }
+
+    // 2. Добавляем или обновляем пользователя в таблице users (upsert)
+    const { data: userData, error: insertError } = await supabase
+      .from('users')
+      .upsert([
+        {
+          id: authData.user.id,
+          email: formData.email,
+          name: formData.name,
+          phone: formData.phone,
+          is_admin: false,
+        },
+      ])
+      .select()
+
+    if (insertError) {
+      console.error('Ошибка добавления/обновления в users:', insertError.message, insertError)
+    } else {
+      console.log('Пользователь добавлен/обновлён в users:', userData)
+    }
+
+    router.push('/')
     setLoading(false)
   }
 

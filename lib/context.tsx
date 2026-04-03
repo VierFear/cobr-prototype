@@ -40,7 +40,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>(initialEnrollments)
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // Load session and data from localStorage on mount
   useEffect(() => {
     try {
       const savedSession = localStorage.getItem(SESSION_KEY)
@@ -55,7 +54,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       
       if (savedSession) {
         const sessionUser = JSON.parse(savedSession)
-        // Verify user still exists in the users list
         const currentUsers = savedData ? JSON.parse(savedData).users || initialUsers : initialUsers
         const validUser = currentUsers.find((u: User) => u.id === sessionUser.id)
         if (validUser) {
@@ -68,7 +66,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsInitialized(true)
   }, [])
 
-  // Save data to localStorage whenever it changes
   useEffect(() => {
     if (!isInitialized) return
     try {
@@ -82,11 +79,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const foundUser = users.find(u => u.email === email && u.password === password)
     if (foundUser) {
       setUser(foundUser)
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(foundUser))
-      } catch (error) {
-        console.error('Error saving session:', error)
-      }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(foundUser))
       return true
     }
     return false
@@ -94,17 +87,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setUser(null)
-    try {
-      localStorage.removeItem(SESSION_KEY)
-    } catch (error) {
-      console.error('Error clearing session:', error)
-    }
+    localStorage.removeItem(SESSION_KEY)
   }, [])
 
   const register = useCallback((name: string, email: string, phone: string, password: string): boolean => {
-    if (users.some(u => u.email === email)) {
-      return false
-    }
+    if (users.some(u => u.email === email)) return false
     const newUser: User = {
       id: `u${users.length + 1}`,
       name,
@@ -116,22 +103,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setUsers(prev => [...prev, newUser])
     setUser(newUser)
-    try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(newUser))
-    } catch (error) {
-      console.error('Error saving session:', error)
-    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(newUser))
     return true
   }, [users])
 
   const enroll = useCallback((clubId: string, childName: string, childAge: number, parentPhone: string, comment: string): boolean => {
     if (!user) return false
-    
-    const existingEnrollment = enrollments.find(
-      e => e.userId === user.id && e.clubId === clubId && e.status !== 'completed'
-    )
+    const existingEnrollment = enrollments.find(e => e.userId === user.id && e.clubId === clubId && e.status !== 'completed')
     if (existingEnrollment) return false
-
     const newEnrollment: Enrollment = {
       id: `e${enrollments.length + 1}`,
       userId: user.id,
@@ -148,23 +127,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user, enrollments])
 
   const updateEnrollmentStatus = useCallback((enrollmentId: string, status: Enrollment['status']) => {
-    setEnrollments(prev => prev.map(e => 
-      e.id === enrollmentId ? { ...e, status } : e
-    ))
+    setEnrollments(prev => prev.map(e => e.id === enrollmentId ? { ...e, status } : e))
   }, [])
 
   const addClub = useCallback((club: Omit<Club, 'id'>) => {
-    const newClub: Club = {
-      ...club,
-      id: `${clubs.length + 1}`
-    }
+    const newClub: Club = { ...club, id: `${clubs.length + 1}` }
     setClubs(prev => [...prev, newClub])
   }, [clubs])
 
   const updateClub = useCallback((clubId: string, updates: Partial<Club>) => {
-    setClubs(prev => prev.map(c => 
-      c.id === clubId ? { ...c, ...updates } : c
-    ))
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, ...updates } : c))
   }, [])
 
   const deleteClub = useCallback((clubId: string) => {
@@ -173,58 +145,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addClubLesson = useCallback((clubId: string, lesson: Omit<ClubScheduleItem, 'id'>) => {
-    setClubs(prev => prev.map(c =>
-      c.id === clubId
-        ? { ...c, lessons: [...(c.lessons ?? []), { ...lesson, id: `l${Date.now()}` }] }
-        : c
-    ))
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, lessons: [...(c.lessons ?? []), { ...lesson, id: `l${Date.now()}` }] } : c))
   }, [])
 
   const removeClubLesson = useCallback((clubId: string, lessonId: string) => {
-    setClubs(prev => prev.map(c =>
-      c.id === clubId
-        ? { ...c, lessons: (c.lessons ?? []).filter(item => item.id !== lessonId) }
-        : c
-    ))
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, lessons: (c.lessons ?? []).filter(item => item.id !== lessonId) } : c))
   }, [])
 
   const addClubMaterial = useCallback((clubId: string, material: Omit<ClubMaterialItem, 'id'>) => {
-    setClubs(prev => prev.map(c =>
-      c.id === clubId
-        ? { ...c, materials: [...(c.materials ?? []), { ...material, id: `m${Date.now()}` }] }
-        : c
-    ))
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, materials: [...(c.materials ?? []), { ...material, id: `m${Date.now()}` }] } : c))
   }, [])
 
   const removeClubMaterial = useCallback((clubId: string, materialId: string) => {
-    setClubs(prev => prev.map(c =>
-      c.id === clubId
-        ? { ...c, materials: (c.materials ?? []).filter(item => item.id !== materialId) }
-        : c
-    ))
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, materials: (c.materials ?? []).filter(item => item.id !== materialId) } : c))
   }, [])
 
   const setClubLogo = useCallback((clubId: string, logo: string) => {
-    setClubs(prev => prev.map(c =>
-      c.id === clubId
-        ? { ...c, logo }
-        : c
-    ))
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, logo } : c))
   }, [])
 
   const updateUser = useCallback((userId: string, updates: Partial<User>) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, ...updates } : u
-    ))
-    // Update current user if it's the same user
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u))
     if (user && user.id === userId) {
       const updatedUser = { ...user, ...updates }
       setUser(updatedUser)
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser))
-      } catch (error) {
-        console.error('Error saving session:', error)
-      }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser))
     }
   }, [user])
 
@@ -239,27 +184,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      user,
-      users,
-      clubs,
-      enrollments,
-      isInitialized,
-      login,
-      logout,
-      register,
-      enroll,
-      updateEnrollmentStatus,
-      addClub,
-      updateClub,
-      deleteClub,
-      addClubLesson,
-      removeClubLesson,
-      addClubMaterial,
-      removeClubMaterial,
-      setClubLogo,
-      updateUser,
-      getUserById,
-      getUserEnrollments
+      user, users, clubs, enrollments, isInitialized,
+      login, logout, register, enroll, updateEnrollmentStatus,
+      addClub, updateClub, deleteClub,
+      addClubLesson, removeClubLesson,
+      addClubMaterial, removeClubMaterial, setClubLogo,
+      updateUser, getUserById, getUserEnrollments
     }}>
       {children}
     </AppContext.Provider>
@@ -268,8 +198,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 export function useApp() {
   const context = useContext(AppContext)
-  if (context === undefined) {
-    throw new Error('useApp must be used within an AppProvider')
-  }
+  if (context === undefined) throw new Error('useApp must be used within an AppProvider')
   return context
 }

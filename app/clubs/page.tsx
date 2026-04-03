@@ -5,7 +5,7 @@ import { MobileLayout } from '@/components/mobile-layout'
 import { ClubCard } from '@/components/club-card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { CategoryFilter, Club } from '@/lib/types'
 import { Search, SlidersHorizontal } from 'lucide-react'
 
@@ -17,9 +17,46 @@ const categories: { value: CategoryFilter; label: string }[] = [
 ]
 
 export default function ClubsPage() {
-  const { clubs } = useApp()
+  const [clubs, setClubs] = useState<Club[]>([])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<CategoryFilter>('all')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchClubs = async () => {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('clubs')
+        .select('*')
+      
+      if (error) {
+        console.error('Ошибка загрузки клубов:', error)
+        setClubs([])
+      } else {
+              // Безопасное преобразование snake_case → camelCase
+        const formattedClubs = (data || []).map((club: any) => ({
+        id: String(club.id),
+        name: club.name || '',
+        description: club.description || '',
+        fullDescription: club.full_description || '',
+        category: club.category || 'drones',
+        ageGroup: club.age_group || '',
+        schedule: club.schedule || '',
+        leader: club.leader || '',
+        leaderContact: club.leader_contact || '',
+        image: club.image || '',
+        logo: club.logo || '',
+        materials: club.materials || [],
+        lessons: club.lessons || [],
+      })) as any
+      
+      setClubs(formattedClubs)
+      }
+      setLoading(false)
+    }
+
+    fetchClubs()
+  }, [])
 
   const filteredClubs = useMemo(() => {
     return clubs.filter((club) => {
@@ -30,10 +67,19 @@ export default function ClubsPage() {
     })
   }, [clubs, search, category])
 
+  if (loading) {
+    return (
+      <MobileLayout>
+        <div className="flex justify-center items-center h-64">
+          <p>Загрузка клубов...</p>
+        </div>
+      </MobileLayout>
+    )
+  }
+
   return (
     <MobileLayout>
       <div className="flex flex-col gap-4 p-4">
-        {/* Search Bar */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -50,7 +96,6 @@ export default function ClubsPage() {
           </Button>
         </div>
 
-        {/* Category Chips */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           {categories.map((cat) => (
             <Button
@@ -69,12 +114,10 @@ export default function ClubsPage() {
           ))}
         </div>
 
-        {/* Results Count */}
         <p className="text-sm text-muted-foreground">
           Найдено: {filteredClubs.length} {filteredClubs.length === 1 ? 'клуб' : 'клубов'}
         </p>
 
-        {/* Clubs Grid */}
         <div className="flex flex-col gap-4">
           {filteredClubs.length > 0 ? (
             filteredClubs.map((club) => (

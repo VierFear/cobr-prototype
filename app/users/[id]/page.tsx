@@ -1,27 +1,101 @@
 'use client'
 
-import { use } from 'react'
+import { use, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Header } from '@/components/header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Spinner } from '@/components/ui/spinner'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { Mail, Clock, CheckCircle, UserX } from 'lucide-react'
+
+interface EnrollmentWithClub {
+  id: string
+  status: string
+  child_name: string
+  clubs: {
+    id: number
+    name: string
+    image: string
+  }
+}
 
 export default function UserProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const { getUserById, clubs, enrollments, isInitialized } = useApp()
-  
-  const profileUser = getUserById(id)
-  const userEnrollments = enrollments.filter(e => e.userId === id && e.status === 'accepted')
+  const [profileUser, setProfileUser] = useState<any>(null)
+  const [userEnrollments, setUserEnrollments] = useState<EnrollmentWithClub[]>([])
+  const [loading, setLoading] = useState(true)
 
-  if (!isInitialized) {
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      setLoading(true)
+      
+      // 1. Получаем данные пользователя из таблицы users
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (userError || !userData) {
+        console.error('Ошибка загрузки пользователя:', userError)
+        setLoading(false)
+        return
+      }
+      
+      setProfileUser(userData)
+      
+      // 2. Получаем заявки пользователя с данными о клубах
+      const { data: enrollmentsData } = await supabase
+        .from('enrollments')
+        .select(`
+          id,
+          status,
+          child_name,
+          clubs (
+            id,
+            name,
+            image
+          )
+        `)
+        .eq('user_id', id)
+        .eq('status', 'accepted')
+      
+      setUserEnrollments(enrollmentsData as any || [])
+      setLoading(false)
+    }
+    
+    fetchUserProfile()
+  }, [id])
+
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return {
+          label: 'Ожидание',
+          icon: Clock,
+          className: 'bg-yellow-100 text-yellow-800'
+        }
+      case 'accepted':
+        return {
+          label: 'Участник',
+          icon: CheckCircle,
+          className: 'bg-green-100 text-green-800'
+        }
+      default:
+        return {
+          label: status,
+          icon: Clock,
+          className: 'bg-gray-100 text-gray-800'
+        }
+    }
+  }
+
+  if (loading) {
     return (
       <MobileLayout header={<Header title="Профиль" showBack backHref="/" />}>
         <div className="flex min-h-[60vh] flex-col items-center justify-center">
-          <Spinner className="h-8 w-8 text-primary" />
+          <p>Загрузка...</p>
         </div>
       </MobileLayout>
     )
@@ -48,28 +122,10 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
     )
   }
 
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return {
-          label: 'Ожидание',
-          icon: Clock,
-          className: 'bg-yellow-100 text-yellow-800'
-        }
-      case 'accepted':
-        return {
-          label: 'Участник',
-          icon: CheckCircle,
-          className: 'bg-green-100 text-green-800'
-        }
-      default:
-        return {
-          label: status,
-          icon: Clock,
-          className: 'bg-gray-100 text-gray-800'
-        }
-    }
-  }
+  // Данные для отображения
+  const displayName = profileUser.name || profileUser.email?.split('@')[0] || 'Пользователь'
+  const displayAvatar = profileUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0057B8&color=fff`
+  const displayBio = profileUser.bio || ''
 
   return (
     <MobileLayout header={<Header title="Профиль участника" showBack backHref="/" />}>
@@ -79,17 +135,17 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
           <CardContent className="pt-6">
             <div className="flex flex-col items-center text-center">
               <img
-                src={profileUser.avatar}
-                alt={profileUser.name}
+                src={displayAvatar}
+                alt={displayName}
                 className="h-24 w-24 rounded-full object-cover"
               />
-              <h2 className="mt-3 text-xl font-semibold text-foreground">{profileUser.name}</h2>
+              <h2 className="mt-3 text-xl font-semibold text-foreground">{displayName}</h2>
               <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                 <Mail className="h-4 w-4" />
                 {profileUser.email}
               </div>
-              {profileUser.bio && (
-                <p className="mt-4 text-sm text-muted-foreground">{profileUser.bio}</p>
+              {displayBio && (
+                <p className="mt-4 text-sm text-muted-foreground">{displayBio}</p>
               )}
             </div>
           </CardContent>
@@ -104,7 +160,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
             <CardContent>
               <div className="flex flex-col gap-3">
                 {userEnrollments.map((enrollment) => {
-                  const club = clubs.find((c) => c.id === enrollment.clubId)
+                  const club = enrollment.clubs
                   const statusConfig = getStatusConfig(enrollment.status)
                   const StatusIcon = statusConfig.icon
 

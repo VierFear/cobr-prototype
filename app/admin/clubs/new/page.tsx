@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,14 +8,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload } from '@/components/image-upload'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { ClubMaterialItem } from '@/lib/types'
 import { Plus, Trash2 } from 'lucide-react'
 
 export default function NewClubPage() {
   const router = useRouter()
-  const { user, addClub } = useApp()
+  const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -31,13 +34,46 @@ export default function NewClubPage() {
   const [materials, setMaterials] = useState<ClubMaterialItem[]>([])
   const [newMaterial, setNewMaterial] = useState({ title: '', url: '', type: 'youtube' as 'youtube' | 'article' | 'pdf' | 'other' })
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Получаем текущего пользователя
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (!authUser) {
+        router.push('/login')
+        return
+      }
+      
+      setUser(authUser)
+      
+      // Проверяем, является ли пользователь админом
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', authUser.id)
+        .single()
+      
+      const adminStatus = userData?.is_admin || false
+      setIsAdmin(adminStatus)
+      
+      if (!adminStatus) {
+        router.push('/')
+        return
+      }
+      
+      setCheckingAuth(false)
+    }
+    
+    checkAuth()
+  }, [router])
+
   const addMaterial = () => {
     if (!newMaterial.title.trim() || !newMaterial.url.trim()) return
 
     setMaterials((prev) => [
       ...prev,
       {
-        id: `m${Date.now()}`,
+        id: `temp-${Date.now()}`,
         title: newMaterial.title.trim(),
         url: newMaterial.url.trim(),
         type: newMaterial.type
@@ -50,8 +86,17 @@ export default function NewClubPage() {
     setMaterials((prev) => prev.filter((_, i) => i !== index))
   }
 
-  if (!user?.isAdmin) {
-    router.push('/')
+  if (checkingAuth) {
+    return (
+      <MobileLayout showBack title="Новый клуб">
+        <div className="flex min-h-[60vh] flex-col items-center justify-center">
+          <p>Загрузка...</p>
+        </div>
+      </MobileLayout>
+    )
+  }
+
+  if (!user || !isAdmin) {
     return null
   }
 
@@ -65,14 +110,51 @@ export default function NewClubPage() {
     
     setLoading(true)
 
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    addClub({
-      ...formData,
-      materials
-    })
-
+    // 1. Создаём новый клуб
+    const { data: newClub, error: clubError } = await supabase
+      .from('clubs')
+      .insert({
+        name: formData.name,
+        description: formData.description,
+        full_description: formData.fullDescription,
+        category: formData.category,
+        age_group: formData.ageGroup,
+        schedule: formData.schedule,
+        leader: formData.leader,
+        leader_contact: formData.leaderContact,
+        image: formData.image,
+        logo: formData.logo || null,
+      })
+      .select()
+      .single()
+    
+    if (clubError) {
+      console.error('Ошибка при создании клуба:', clubError)
+      alert('Ошибка при создании клуба')
+      setLoading(false)
+      return
+    }
+    
+    // 2. Добавляем материалы, если есть
+    if (materials.length > 0 && newClub) {
+      const { error: materialsError } = await supabase
+        .from('materials')
+        .insert(
+          materials.map(m => ({
+            club_id: newClub.id,
+            title: m.title,
+            url: m.url,
+            type: m.type || 'other'
+          }))
+        )
+      
+      if (materialsError) {
+        console.error('Ошибка при добавлении материалов:', materialsError)
+      }
+    }
+    
     router.push('/admin/clubs')
+    setLoading(false)
   }
 
   return (
@@ -198,7 +280,7 @@ export default function NewClubPage() {
 
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">
-                  Необходимые материалы
+                  Учебные материалы
                 </label>
                 <div className="grid gap-2 md:grid-cols-3">
                   <Input
@@ -211,11 +293,16 @@ export default function NewClubPage() {
                     onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })}
                     placeholder="Ссылка"
                   />
-                  <Input
+                  <select
                     value={newMaterial.type}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value as 'youtube' | 'article' | 'pdf' | 'other' })}
-                    placeholder="Тип"
-                  />
+                    onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value as any })}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="youtube">YouTube</option>
+                    <option value="article">Статья</option>
+                    <option value="pdf">PDF</option>
+                    <option value="other">Другое</option>
+                  </select>
                   <Button type="button" variant="outline" onClick={addMaterial}>
                     <Plus className="h-4 w-4" />
                     Добавить материал

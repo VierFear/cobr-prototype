@@ -6,19 +6,29 @@ import { MobileLayout } from '@/components/mobile-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { CheckCircle } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     setLoading(true)
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+
+    if (resetError) {
+      setError(resetError.message)
+      setLoading(false)
+      return
+    }
 
     setSubmitted(true)
     setLoading(false)
@@ -72,6 +82,13 @@ export default function ForgotPasswordPage() {
                     autoComplete="email"
                   />
                 </div>
+
+                {error && (
+                  <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
                 <Button 
                   type="submit" 

@@ -1,34 +1,159 @@
 'use client'
 
-import { use, useState } from 'react'
+import { use, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { Calendar, User, Phone, Package, CheckCircle } from 'lucide-react'
+import type { Club } from '@/lib/types'
 
 export default function ClubDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { clubs, user, enroll, getUserEnrollments } = useApp()
+  const [club, setClub] = useState<Club | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [existingEnrollment, setExistingEnrollment] = useState<any>(null)
   const [showEnrollForm, setShowEnrollForm] = useState(false)
   const [enrollSuccess, setEnrollSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'schedule' | 'materials'>('description')
+  const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
     childName: '',
     childAge: '',
-    parentPhone: user?.phone || '',
+    parentPhone: '',
     comment: ''
   })
 
-  const club = clubs.find((c) => c.id === id)
-  const userEnrollments = getUserEnrollments()
-  const existingEnrollment = userEnrollments.find(
-    (e) => e.clubId === id && e.status !== 'completed'
-  )
+  // Загрузка клуба, пользователя и проверка существующей заявки
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      
+      // 1. Получаем текущего пользователя
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      setUser(currentUser)
+      if (currentUser) {
+        // Получаем телефон из таблицы users (если есть)
+        const { data: userData } = await supabase
+          .from('users')
+          .select('phone')
+          .eq('id', currentUser.id)
+          .single()
+        if (userData?.phone) {
+          setFormData(prev => ({ ...prev, parentPhone: userData.phone }))
+        }
+      }
+
+      // 2. Получаем клуб с занятиями и материалами
+      const { data: clubData, error } = await supabase
+        .from('clubs')
+        .select('*, lessons(*), materials(*)')
+        .eq('id', id)
+        .single()
+
+      if (error || !clubData) {
+        console.error('Ошибка загрузки клуба:', error)
+        setLoading(false)
+        return
+      }
+
+      // Преобразуем snake_case → camelCase
+    const formattedClub = {
+      id: clubData.id?.toString() ?? '',
+      name: clubData.name ?? '',
+      description: clubData.description ?? '',
+      fullDescription: (clubData as any).full_description ?? (clubData as any).fullDescription ?? '',
+      category: clubData.category ?? 'drones',
+      ageGroup: clubData.age_group ?? (clubData as any).ageGroup ?? '',
+      schedule: clubData.schedule ?? '',
+      leader: clubData.leader ?? '',
+      leaderContact: clubData.leader_contact ?? (clubData as any).leaderContact ?? '',
+      image: clubData.image ?? '',
+      logo: clubData.logo ?? '',
+      materials: (clubData.materials || []).map((m: any) => ({
+        id: m.id?.toString() ?? '',
+        title: m.title ?? '',
+        url: m.url ?? '',
+        type: m.type ?? 'other',
+      })),
+      lessons: (clubData.lessons || []).map((l: any) => ({
+        id: l.id?.toString() ?? '',
+        date: l.date ?? '',
+        time: l.time ?? '',
+        topic: l.topic ?? '',
+      })),
+    } as any
+    
+    setClub(formattedClub)
+
+      // 3. Проверяем, есть ли уже заявка от этого пользователя
+      if (currentUser) {
+        const { data: enrollment } = await supabase
+          .from('enrollments')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .eq('club_id', id)
+          .neq('status', 'completed')
+          .maybeSingle()
+        setExistingEnrollment(enrollment)
+      }
+
+      setLoading(false)
+    }
+
+    fetchData()
+  }, [id])
+
+  const handleEnroll = () => {
+    if (!user) {
+      router.push('/login')
+      return
+    }
+    if (existingEnrollment) return
+    setShowEnrollForm(true)
+  }
+
+  const handleSubmitEnrollment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+
+    const { error } = await supabase
+      .from('enrollments')
+      .insert([
+        {
+          user_id: user.id,
+          club_id: parseInt(id),
+          child_name: formData.childName,
+          child_age: parseInt(formData.childAge),
+          parent_phone: formData.parentPhone,
+          comment: formData.comment,
+          status: 'pending',
+        },
+      ])
+
+    if (error) {
+      console.error('Ошибка при записи:', error)
+    } else {
+      setEnrollSuccess(true)
+      setShowEnrollForm(false)
+      // Обновляем статус существующей заявки
+      setExistingEnrollment({ id: 'new', status: 'pending' })
+    }
+  }
+
+  if (loading) {
+    return (
+      <MobileLayout showBack backHref="/clubs" title="Загрузка">
+        <div className="flex justify-center items-center h-64">
+          <p>Загрузка...</p>
+        </div>
+      </MobileLayout>
+    )
+  }
 
   if (!club) {
     return (
@@ -41,30 +166,6 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </MobileLayout>
     )
-  }
-
-  const handleEnroll = () => {
-    if (!user) {
-      router.push('/login')
-      return
-    }
-    if (existingEnrollment) return
-    setShowEnrollForm(true)
-  }
-
-  const handleSubmitEnrollment = (e: React.FormEvent) => {
-    e.preventDefault()
-    const success = enroll(
-      club.id,
-      formData.childName,
-      parseInt(formData.childAge),
-      formData.parentPhone,
-      formData.comment
-    )
-    if (success) {
-      setEnrollSuccess(true)
-      setShowEnrollForm(false)
-    }
   }
 
   return (
@@ -89,7 +190,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
 
           <div className="absolute bottom-4 left-4 right-4">
             <span className="mb-2 inline-block rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-              {club.ageGroup}
+              {club.age_group || 'Не указан'}
             </span>
             <h1 className="text-balance text-2xl font-bold text-white">{club.name}</h1>
           </div>
@@ -115,7 +216,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
               <Phone className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Контакт</p>
-                <p className="text-sm font-medium text-foreground">{club.leaderContact}</p>
+                <p className="text-sm font-medium text-foreground">{club.leader_contact || 'Не указан'}</p>
               </div>
             </div>
           </div>
@@ -148,7 +249,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
             <CardContent className="p-4">
               {activeTab === 'description' && (
                 <p className="text-sm text-muted-foreground">
-                  {club.fullDescription || club.description}
+                {club.full_description || club.description || 'Описание отсутствует'}
                 </p>
               )}
 

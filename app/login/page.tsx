@@ -1,38 +1,51 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useApp()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Проверяем, не залогинен ли уже пользователь
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/')
+      }
+    }
+    checkUser()
+  }, [router])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500))
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
 
-    const success = login(email, password)
-    if (success) {
-      router.push('/')
-    } else {
+    if (signInError) {
       setError('Неверный email или пароль')
+      setLoading(false)
+      return
     }
+
+    router.push('/')
     setLoading(false)
   }
 
@@ -126,13 +139,6 @@ export default function LoginPage() {
         >
           Вернуться на главную
         </Link>
-
-        {/* Demo credentials hint */}
-        <div className="mt-8 rounded-lg bg-muted p-4 text-center">
-          <p className="text-xs text-muted-foreground">Тестовые аккаунты:</p>
-          <p className="mt-1 text-xs text-foreground">maria@example.com / password123</p>
-          <p className="text-xs text-foreground">admin@cobr.ru / admin123</p>
-        </div>
       </div>
     </MobileLayout>
   )

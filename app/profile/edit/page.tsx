@@ -9,37 +9,63 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Spinner } from '@/components/ui/spinner'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 
 export default function ProfileEditPage() {
   const router = useRouter()
-  const { user, updateUser, isInitialized } = useApp()
-  
+  const [user, setUser] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     avatar: '',
     bio: ''
   })
-  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    if (user) {
+    const fetchUser = async () => {
+      setLoading(true)
+      
+      // Получаем текущего пользователя из Auth
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (!authUser) {
+        setLoading(false)
+        return
+      }
+      
+      setUser(authUser)
+      
+      // Получаем дополнительные данные из таблицы users
+      const { data: profileData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single()
+      
+      setUserProfile(profileData)
+      
+      // Заполняем форму
       setFormData({
-        name: user.name,
-        phone: user.phone,
-        avatar: user.avatar,
-        bio: user.bio || ''
+        name: profileData?.name || authUser.user_metadata?.full_name || '',
+        phone: profileData?.phone || '',
+        avatar: profileData?.avatar || '',
+        bio: profileData?.bio || ''
       })
+      
+      setLoading(false)
     }
-  }, [user])
+    
+    fetchUser()
+  }, [])
 
-  if (!isInitialized) {
+  if (loading) {
     return (
       <MobileLayout header={<Header title="Редактирование" showBack backHref="/profile" />}>
         <div className="flex min-h-[60vh] flex-col items-center justify-center">
-          <Spinner className="h-8 w-8 text-primary" />
+          <p>Загрузка...</p>
         </div>
       </MobileLayout>
     )
@@ -50,20 +76,28 @@ export default function ProfileEditPage() {
     return null
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
     
-    updateUser(user.id, {
-      name: formData.name,
-      phone: formData.phone,
-      avatar: formData.avatar,
-      bio: formData.bio
-    })
+    // Обновляем данные в таблице users
+    const { error } = await supabase
+      .from('users')
+      .upsert({
+        id: user.id,
+        name: formData.name,
+        phone: formData.phone,
+        avatar: formData.avatar,
+        bio: formData.bio,
+        email: user.email,
+      })
     
-    setTimeout(() => {
-      router.push('/profile')
-    }, 300)
+    if (error) {
+      console.error('Ошибка при сохранении:', error)
+    }
+    
+    setIsSaving(false)
+    router.push('/profile')
   }
 
   return (
@@ -79,7 +113,7 @@ export default function ProfileEditPage() {
               <div className="flex flex-col items-center gap-2">
                 <img
                   src={formData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-                  alt={formData.name}
+                  alt={formData.name || 'Аватар'}
                   className="h-24 w-24 rounded-full object-cover"
                 />
               </div>
@@ -158,7 +192,7 @@ export default function ProfileEditPage() {
                   className="flex-1 bg-primary text-primary-foreground"
                   disabled={isSaving}
                 >
-                  {isSaving ? <Spinner className="h-4 w-4" /> : 'Сохранить'}
+                  {isSaving ? 'Сохранение...' : 'Сохранить'}
                 </Button>
               </div>
             </form>

@@ -1,21 +1,126 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useApp } from '@/lib/context'
-import { Enrollment } from '@/lib/types'
+import { supabase } from '@/lib/supabase'
 import { Spinner } from '@/components/ui/spinner'
 import { Clock, CheckCircle, XCircle, Phone, MessageSquare } from 'lucide-react'
 
+type EnrollmentStatus = 'pending' | 'accepted' | 'completed'
+
+interface Enrollment {
+  id: number
+  user_id: string
+  club_id: number
+  child_name: string
+  child_age: number
+  parent_phone: string
+  comment: string
+  status: EnrollmentStatus
+  created_at: string
+  clubs: {
+    id: number
+    name: string
+    image: string
+  }
+  users: {
+    name: string
+    email: string
+  }
+}
+
 export default function AdminEnrollmentsPage() {
   const router = useRouter()
-  const { user, clubs, users, enrollments, updateEnrollmentStatus, isInitialized } = useApp()
+  const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [filter, setFilter] = useState<'all' | 'pending' | 'accepted' | 'completed'>('all')
 
-  if (!isInitialized) {
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      
+      // 1. Получаем текущего пользователя
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (!authUser) {
+        setLoading(false)
+        return
+      }
+      
+      setUser(authUser)
+      
+      // 2. Проверяем, является ли пользователь админом
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', authUser.id)
+        .single()
+      
+      const adminStatus = userData?.is_admin || false
+      setIsAdmin(adminStatus)
+      
+      if (!adminStatus) {
+        setLoading(false)
+        return
+      }
+      
+      // 3. Получаем заявки с данными о клубах и пользователях
+      const { data: enrollmentsData } = await supabase
+        .from('enrollments')
+        .select(`
+          id,
+          user_id,
+          club_id,
+          child_name,
+          child_age,
+          parent_phone,
+          comment,
+          status,
+          created_at,
+          clubs (
+            id,
+            name,
+            image
+          ),
+          users (
+            name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false })
+      
+      setEnrollments(enrollmentsData as any || [])
+      setLoading(false)
+    }
+    
+    fetchData()
+  }, [])
+
+  const updateEnrollmentStatus = async (enrollmentId: number, newStatus: EnrollmentStatus) => {
+    const { error } = await supabase
+      .from('enrollments')
+      .update({ status: newStatus })
+      .eq('id', enrollmentId)
+    
+    if (error) {
+      console.error('Ошибка при обновлении статуса:', error)
+      alert('Не удалось обновить статус заявки')
+    } else {
+      // Обновляем локальное состояние
+      setEnrollments(prev =>
+        prev.map(e =>
+          e.id === enrollmentId ? { ...e, status: newStatus } : e
+        )
+      )
+    }
+  }
+
+  if (loading) {
     return (
       <MobileLayout showBack backHref="/admin" title="Заявки">
         <div className="flex min-h-[60vh] flex-col items-center justify-center">
@@ -25,7 +130,7 @@ export default function AdminEnrollmentsPage() {
     )
   }
 
-  if (!user?.isAdmin) {
+  if (!user || !isAdmin) {
     router.push('/')
     return null
   }
@@ -34,7 +139,7 @@ export default function AdminEnrollmentsPage() {
     filter === 'all' || e.status === filter
   )
 
-  const getStatusConfig = (status: Enrollment['status']) => {
+  const getStatusConfig = (status: EnrollmentStatus) => {
     switch (status) {
       case 'pending':
         return {
@@ -90,8 +195,7 @@ export default function AdminEnrollmentsPage() {
         <div className="flex flex-col gap-3">
           {filteredEnrollments.length > 0 ? (
             filteredEnrollments.map((enrollment) => {
-              const club = clubs.find(c => c.id === enrollment.clubId)
-              const enrollmentUser = users.find(u => u.id === enrollment.userId)
+              const club = enrollment.clubs
               const statusConfig = getStatusConfig(enrollment.status)
               const StatusIcon = statusConfig.icon
 
@@ -110,7 +214,7 @@ export default function AdminEnrollmentsPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <h4 className="font-medium text-foreground">
-                              {enrollment.childName}, {enrollment.childAge} лет
+                              {enrollment.child_name}, {enrollment.child_age} лет
                             </h4>
                             <p className="text-xs text-muted-foreground">{club.name}</p>
                           </div>
@@ -123,7 +227,7 @@ export default function AdminEnrollmentsPage() {
                         <div className="mt-2 flex flex-col gap-1">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Phone className="h-3 w-3" />
-                            {enrollment.parentPhone}
+                            {enrollment.parent_phone}
                           </div>
                           {enrollment.comment && (
                             <div className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -134,7 +238,7 @@ export default function AdminEnrollmentsPage() {
                         </div>
 
                         <p className="mt-2 text-xs text-muted-foreground">
-                          Заявка от {enrollment.createdAt}
+                          Заявка от {new Date(enrollment.created_at).toLocaleDateString('ru-RU')}
                         </p>
 
                         {/* Action Buttons */}

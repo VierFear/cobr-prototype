@@ -8,18 +8,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload } from '@/components/image-upload'
-import { useApp } from '@/lib/context'
+import { supabase } from '@/lib/supabase'
 import { ClubMaterialItem } from '@/lib/types'
-import { Spinner } from '@/components/ui/spinner'
 import { Plus, Trash2 } from 'lucide-react'
 
 export default function EditClubPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { user, clubs, updateClub, isInitialized } = useApp()
   const [loading, setLoading] = useState(false)
-  
-  const club = clubs.find(c => c.id === id)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -37,32 +36,75 @@ export default function EditClubPage({ params }: { params: Promise<{ id: string 
   const [newMaterial, setNewMaterial] = useState({ title: '', url: '', type: 'youtube' as 'youtube' | 'article' | 'pdf' | 'other' })
 
   useEffect(() => {
-    if (club) {
-      setFormData({
-        name: club.name,
-        description: club.description,
-        fullDescription: club.fullDescription,
-        category: club.category,
-        ageGroup: club.ageGroup,
-        schedule: club.schedule,
-        leader: club.leader,
-        leaderContact: club.leaderContact,
-        image: club.image,
-        logo: club.logo || ''
-      })
-      if (club.materials && club.materials.length > 0) {
-        setMaterials(
-          club.materials.map((item) =>
-            typeof item === 'string'
-              ? { id: `m${Date.now()}-${Math.random()}`, title: item, url: '', type: 'other' }
-              : item
-          )
-        )
-      } else {
-        setMaterials([])
+    const fetchData = async () => {
+      setInitialLoading(true)
+      
+      // Проверяем авторизацию и права админа
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) {
+        router.push('/login')
+        return
       }
+      setUser(authUser)
+      
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', authUser.id)
+        .single()
+      
+      if (!userData?.is_admin) {
+        router.push('/')
+        return
+      }
+      setIsAdmin(true)
+      
+      // Загружаем данные клуба
+      const { data: clubData, error } = await supabase
+        .from('clubs')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (error || !clubData) {
+        console.error('Ошибка загрузки клуба:', error)
+        setInitialLoading(false)
+        return
+      }
+      
+      setFormData({
+        name: clubData.name || '',
+        description: clubData.description || '',
+        fullDescription: clubData.full_description || '',
+        category: clubData.category || 'drones',
+        ageGroup: clubData.age_group || '',
+        schedule: clubData.schedule || '',
+        leader: clubData.leader || '',
+        leaderContact: clubData.leader_contact || '',
+        image: clubData.image || '',
+        logo: clubData.logo || ''
+      })
+      
+      // Загружаем материалы
+      const { data: materialsData } = await supabase
+        .from('materials')
+        .select('*')
+        .eq('club_id', id)
+      
+      if (materialsData) {
+        setMaterials(materialsData.map((m: any) => ({
+          id: String(m.id),
+          title: m.title,
+          url: m.url,
+          type: m.type || 'other'
+        })))
+      }
+      
+      setInitialLoading(false)
     }
-  }, [club])
+    
+    fetchData()
+  }, [id, router])
 
   const addMaterial = () => {
     if (!newMaterial.title.trim() || !newMaterial.url.trim()) return
@@ -70,7 +112,7 @@ export default function EditClubPage({ params }: { params: Promise<{ id: string 
     setMaterials((prev) => [
       ...prev,
       {
-        id: `m${Date.now()}`,
+        id: `temp-${Date.now()}`,
         title: newMaterial.title.trim(),
         url: newMaterial.url.trim(),
         type: newMaterial.type
@@ -83,29 +125,18 @@ export default function EditClubPage({ params }: { params: Promise<{ id: string 
     setMaterials((prev) => prev.filter((_, i) => i !== index))
   }
 
-  if (!isInitialized) {
+  if (initialLoading) {
     return (
       <MobileLayout showBack backHref="/admin/clubs" title="Редактирование">
         <div className="flex min-h-[60vh] flex-col items-center justify-center">
-          <Spinner className="h-8 w-8 text-primary" />
+          <p>Загрузка...</p>
         </div>
       </MobileLayout>
     )
   }
 
-  if (!user?.isAdmin) {
-    router.push('/')
+  if (!user || !isAdmin) {
     return null
-  }
-
-  if (!club) {
-    return (
-      <MobileLayout showBack backHref="/admin/clubs" title="Клуб не найден">
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-muted-foreground">Клуб не найден</p>
-        </div>
-      </MobileLayout>
-    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,10 +149,57 @@ export default function EditClubPage({ params }: { params: Promise<{ id: string 
     
     setLoading(true)
 
-    await new Promise(resolve => setTimeout(resolve, 500))
-
-    updateClub(id, { ...formData, materials })
+    // 1. Обновляем клуб
+    const { error: clubError } = await supabase
+      .from('clubs')
+      .update({
+        name: formData.name,
+        description: formData.description,
+        full_description: formData.fullDescription,
+        category: formData.category,
+        age_group: formData.ageGroup,
+        schedule: formData.schedule,
+        leader: formData.leader,
+        leader_contact: formData.leaderContact,
+        image: formData.image,
+        logo: formData.logo || null,
+      })
+      .eq('id', id)
+    
+    if (clubError) {
+      console.error('Ошибка при обновлении клуба:', clubError)
+      alert('Ошибка при сохранении клуба')
+      setLoading(false)
+      return
+    }
+    
+    // 2. Удаляем старые материалы и добавляем новые
+    // Сначала удаляем все старые материалы для этого клуба
+    await supabase
+      .from('materials')
+      .delete()
+      .eq('club_id', id)
+    
+    // Затем добавляем новые
+    if (materials.length > 0) {
+      const { error: materialsError } = await supabase
+        .from('materials')
+        .insert(
+          materials.map(m => ({
+            club_id: parseInt(id),
+            title: m.title,
+            url: m.url,
+            type: m.type || 'other'
+          }))
+        )
+      
+      if (materialsError) {
+        console.error('Ошибка при сохранении материалов:', materialsError)
+      }
+    }
+    
     router.push('/admin/clubs')
+    setLoading(false)
   }
 
   return (
@@ -240,7 +318,7 @@ export default function EditClubPage({ params }: { params: Promise<{ id: string 
 
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">
-                  Необходимые материалы
+                  Учебные материалы
                 </label>
                 <div className="grid gap-2 md:grid-cols-3">
                   <Input
@@ -253,11 +331,16 @@ export default function EditClubPage({ params }: { params: Promise<{ id: string 
                     onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })}
                     placeholder="Ссылка"
                   />
-                  <Input
+                  <select
                     value={newMaterial.type}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value as 'youtube' | 'article' | 'pdf' | 'other' })}
-                    placeholder="Тип"
-                  />
+                    onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value as any })}
+                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="youtube">YouTube</option>
+                    <option value="article">Статья</option>
+                    <option value="pdf">PDF</option>
+                    <option value="other">Другое</option>
+                  </select>
                   <Button type="button" variant="outline" onClick={addMaterial}>
                     <Plus className="h-4 w-4" />
                     Добавить материал

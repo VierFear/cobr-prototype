@@ -2,11 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { MobileLayout } from '@/components/mobile-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useApp } from '@/lib/context'
-import { Spinner } from '@/components/ui/spinner'
+import { supabase } from '@/lib/supabase'
 import { 
   Users, 
   BookOpen, 
@@ -19,20 +19,120 @@ import {
 
 export default function AdminPage() {
   const router = useRouter()
-  const { user, clubs, enrollments, users, isInitialized } = useApp()
+  const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    clubsCount: 0,
+    usersCount: 0,
+    pendingEnrollments: 0,
+    acceptedEnrollments: 0,
+  })
+  const [recentEnrollments, setRecentEnrollments] = useState<any[]>([])
 
-  if (!isInitialized) {
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      setLoading(true)
+      
+      // 1. Получаем текущего пользователя
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      console.log('🔍 authUser:', authUser)
+      
+      if (!authUser) {
+        console.log('❌ Нет пользователя, редирект на логин')
+        setLoading(false)
+        return
+      }
+      
+      setUser(authUser)
+      
+      // 2. Проверяем, является ли пользователь админом
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('is_admin')
+        .eq('id', authUser.id)
+        .single()
+      
+      console.log('🔍 userData:', userData)
+      console.log('🔍 userError:', userError)
+      console.log('🔍 is_admin значение:', userData?.is_admin)
+      
+      const adminStatus = userData?.is_admin || false
+      console.log('🔍 adminStatus:', adminStatus)
+      setIsAdmin(adminStatus)
+      
+      if (!adminStatus) {
+        console.log('❌ Не админ, показываем страницу "Доступ запрещён"')
+        setLoading(false)
+        return
+      }
+      
+      console.log('✅ Админ, загружаем статистику')
+      
+      // 3. Получаем статистику
+      // Клубы
+      const { count: clubsCount } = await supabase
+        .from('clubs')
+        .select('*', { count: 'exact', head: true })
+      
+      // Пользователи (не админы)
+      const { count: usersCount } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_admin', false)
+      
+      // Заявки по статусам
+      const { count: pendingCount } = await supabase
+        .from('enrollments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending')
+      
+      const { count: acceptedCount } = await supabase
+        .from('enrollments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'accepted')
+      
+      setStats({
+        clubsCount: clubsCount || 0,
+        usersCount: usersCount || 0,
+        pendingEnrollments: pendingCount || 0,
+        acceptedEnrollments: acceptedCount || 0,
+      })
+      
+      // 4. Получаем последние заявки с данными о клубах
+      const { data: enrollmentsData } = await supabase
+        .from('enrollments')
+        .select(`
+          id,
+          child_name,
+          status,
+          created_at,
+          clubs (
+            name
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      
+      setRecentEnrollments(enrollmentsData || [])
+      setLoading(false)
+    }
+    
+    fetchAdminData()
+  }, [])
+
+  if (loading) {
     return (
       <MobileLayout showBack backHref="/" title="Админ панель">
         <div className="flex min-h-[60vh] flex-col items-center justify-center">
-          <Spinner className="h-8 w-8 text-primary" />
+          <p>Загрузка...</p>
         </div>
       </MobileLayout>
     )
   }
 
   // Redirect non-admin users
-  if (!user?.isAdmin) {
+  if (!user || !isAdmin) {
     return (
       <MobileLayout showBack backHref="/" title="Доступ запрещён">
         <div className="flex min-h-[60vh] flex-col items-center justify-center p-4">
@@ -53,10 +153,6 @@ export default function AdminPage() {
     )
   }
 
-  const pendingEnrollments = enrollments.filter(e => e.status === 'pending').length
-  const acceptedEnrollments = enrollments.filter(e => e.status === 'accepted').length
-  const totalUsers = users.filter(u => !u.isAdmin).length
-
   return (
     <MobileLayout showBack backHref="/" title="Админ панель">
       <div className="flex flex-col gap-4 p-4">
@@ -65,28 +161,28 @@ export default function AdminPage() {
           <Card className="bg-primary/5">
             <CardContent className="flex flex-col items-center pt-4">
               <BookOpen className="mb-2 h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold text-primary">{clubs.length}</span>
+              <span className="text-2xl font-bold text-primary">{stats.clubsCount}</span>
               <span className="text-xs text-muted-foreground">Клубов</span>
             </CardContent>
           </Card>
           <Card className="bg-primary/5">
             <CardContent className="flex flex-col items-center pt-4">
               <Users className="mb-2 h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold text-primary">{totalUsers}</span>
+              <span className="text-2xl font-bold text-primary">{stats.usersCount}</span>
               <span className="text-xs text-muted-foreground">Пользователей</span>
             </CardContent>
           </Card>
           <Card className="bg-yellow-50">
             <CardContent className="flex flex-col items-center pt-4">
               <Clock className="mb-2 h-8 w-8 text-yellow-600" />
-              <span className="text-2xl font-bold text-yellow-600">{pendingEnrollments}</span>
+              <span className="text-2xl font-bold text-yellow-600">{stats.pendingEnrollments}</span>
               <span className="text-xs text-muted-foreground">Ожидают</span>
             </CardContent>
           </Card>
           <Card className="bg-green-50">
             <CardContent className="flex flex-col items-center pt-4">
               <CheckCircle className="mb-2 h-8 w-8 text-green-600" />
-              <span className="text-2xl font-bold text-green-600">{acceptedEnrollments}</span>
+              <span className="text-2xl font-bold text-green-600">{stats.acceptedEnrollments}</span>
               <span className="text-xs text-muted-foreground">Активных</span>
             </CardContent>
           </Card>
@@ -114,9 +210,9 @@ export default function AdminPage() {
               <Button variant="outline" className="w-full justify-start">
                 <ClipboardList className="mr-2 h-4 w-4 text-primary" />
                 Заявки на запись
-                {pendingEnrollments > 0 && (
+                {stats.pendingEnrollments > 0 && (
                   <span className="ml-auto rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
-                    {pendingEnrollments}
+                    {stats.pendingEnrollments}
                   </span>
                 )}
               </Button>
@@ -145,21 +241,18 @@ export default function AdminPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {enrollments.slice(0, 5).map((enrollment) => {
-              const club = clubs.find(c => c.id === enrollment.clubId)
-              const enrollmentUser = users.find(u => u.id === enrollment.userId)
-              
-              return (
+            {recentEnrollments.length > 0 ? (
+              recentEnrollments.map((enrollment) => (
                 <div 
                   key={enrollment.id} 
                   className="flex items-center justify-between border-b border-border py-2 last:border-0"
                 >
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      {enrollment.childName}
+                      {enrollment.child_name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {club?.name} • {enrollment.createdAt}
+                      {enrollment.clubs?.name} • {new Date(enrollment.created_at).toLocaleDateString('ru-RU')}
                     </p>
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
@@ -173,8 +266,12 @@ export default function AdminPage() {
                      enrollment.status === 'accepted' ? 'Принят' : 'Завершён'}
                   </span>
                 </div>
-              )
-            })}
+              ))
+            ) : (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                Нет заявок
+              </p>
+            )}
             <Link href="/admin/enrollments">
               <Button variant="link" className="mt-2 w-full text-primary">
                 Посмотреть все заявки
