@@ -13,15 +13,15 @@ export interface ClubMaterialItem {
 }
 
 export interface Club {
-  id: number  // в БД SERIAL → number
+  id: string
   name: string
   description: string
-  full_description: string   // ← было fullDescription
+  fullDescription: string
   category: 'drones' | 'modeling' | '3d'
-  age_group: string          // ← было ageGroup
+  ageGroup: string
   schedule: string
   leader: string
-  leader_contact: string     // ← было leaderContact
+  leaderContact: string
   image: string
   logo?: string
   materials?: ClubMaterialItem[]

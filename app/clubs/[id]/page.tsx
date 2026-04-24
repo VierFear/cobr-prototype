@@ -190,7 +190,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
 
           <div className="absolute bottom-4 left-4 right-4">
             <span className="mb-2 inline-block rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-              {club.age_group || 'Не указан'}
+              {club.ageGroup || 'Не указан'}
             </span>
             <h1 className="text-balance text-2xl font-bold text-white">{club.name}</h1>
           </div>
@@ -216,7 +216,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
               <Phone className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-xs text-muted-foreground">Контакт</p>
-                <p className="text-sm font-medium text-foreground">{club.leader_contact || 'Не указан'}</p>
+                <p className="text-sm font-medium text-foreground">{club.leaderContact || 'Не указан'}</p>
               </div>
             </div>
           </div>
@@ -249,7 +249,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
             <CardContent className="p-4">
               {activeTab === 'description' && (
                 <p className="text-sm text-muted-foreground">
-                {club.full_description || club.description || 'Описание отсутствует'}
+                {club.fullDescription || club.description || 'Описание отсутствует'}
                 </p>
               )}
 

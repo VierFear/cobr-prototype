@@ -24,16 +24,33 @@ export default function HomePage() {
 
       // 2. Получаем клубы из Supabase
       const { data: clubsData, error } = await supabase
-        .from('clubs')
-        .select('*')
-        .limit(3)
-      
-      if (error) {
-        console.error('Ошибка загрузки клубов:', error)
-        setClubs([])
-      } else {
-        setClubs(clubsData || [])
-      }
+      .from('clubs')
+      .select('*')
+      .limit(3)
+
+    if (error) {
+      console.error('Ошибка загрузки клубов:', error)
+      setClubs([])
+    } else {
+      // Преобразуем snake_case → camelCase
+      const formattedClubs = (clubsData || []).map((club: any) => ({
+        id: String(club.id),
+        name: club.name,
+        description: club.description,
+        fullDescription: club.full_description,
+        category: club.category,
+        ageGroup: club.age_group,   // ← добавляем возраст
+        schedule: club.schedule,
+        leader: club.leader,
+        leaderContact: club.leader_contact,
+        image: club.image,
+        logo: club.logo,
+        materials: club.materials || [],
+        lessons: club.lessons || [],
+      })) as any
+
+      setClubs(formattedClubs)
+    }
       
       setLoading(false)
     }

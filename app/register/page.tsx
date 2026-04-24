@@ -102,7 +102,14 @@ export default function RegisterPage() {
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-            <span className="text-2xl font-bold text-primary-foreground">ЦР</span>
+            <img
+                src="/logo.svg"
+                alt="ЦОБР логотип"
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = 'https://via.placeholder.com/36?text=ЦР'
+                }}
+              />
           </div>
           <h1 className="text-2xl font-bold text-foreground">ЦОБР</h1>
         </div>

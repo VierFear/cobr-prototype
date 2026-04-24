@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "0e0c299c-afcc-405e-859f-27415f4ebf13"
+      }
+    },
+    "android": {
+      "package": "com.vierfear.cobrapp"
+    }
+  }
+}

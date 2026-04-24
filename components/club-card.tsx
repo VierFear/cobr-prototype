@@ -40,7 +40,7 @@ export function ClubCard({ club, compact = false }: ClubCardProps) {
           </p>
           <div className="flex items-center justify-between gap-2">
             <span className="rounded-full bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
-              {club.ageGroup}
+              {club.ageGroup || 'Не указан'}
             </span>
             {!compact && (
               <Button variant="link" size="sm" className="h-auto p-0 text-xs text-primary">

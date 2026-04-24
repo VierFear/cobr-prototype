@@ -51,6 +51,7 @@ export default function ClubsPage() {
       })) as any
       
       setClubs(formattedClubs)
+      console.log('clubs data:', clubs)
       }
       setLoading(false)
     }
@@ -139,4 +140,5 @@ export default function ClubsPage() {
       </div>
     </MobileLayout>
   )
+  
 }
