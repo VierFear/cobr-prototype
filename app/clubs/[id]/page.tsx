@@ -21,6 +21,7 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
   const [enrollSuccess, setEnrollSuccess] = useState(false)
   const [activeTab, setActiveTab] = useState<'description' | 'schedule' | 'materials'>('description')
   const [loading, setLoading] = useState(true)
+  const [currentEnrollments, setCurrentEnrollments] = useState(0)
   const [formData, setFormData] = useState({
     childName: '',
     childAge: '',
@@ -62,35 +63,46 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       // Преобразуем snake_case → camelCase
-    const formattedClub = {
-      id: clubData.id?.toString() ?? '',
-      name: clubData.name ?? '',
-      description: clubData.description ?? '',
-      fullDescription: (clubData as any).full_description ?? (clubData as any).fullDescription ?? '',
-      category: clubData.category ?? 'drones',
-      ageGroup: clubData.age_group ?? (clubData as any).ageGroup ?? '',
-      schedule: clubData.schedule ?? '',
-      leader: clubData.leader ?? '',
-      leaderContact: clubData.leader_contact ?? (clubData as any).leaderContact ?? '',
-      image: clubData.image ?? '',
-      logo: clubData.logo ?? '',
-      materials: (clubData.materials || []).map((m: any) => ({
-        id: m.id?.toString() ?? '',
-        title: m.title ?? '',
-        url: m.url ?? '',
-        type: m.type ?? 'other',
-      })),
-      lessons: (clubData.lessons || []).map((l: any) => ({
-        id: l.id?.toString() ?? '',
-        date: l.date ?? '',
-        time: l.time ?? '',
-        topic: l.topic ?? '',
-      })),
-    } as any
-    
-    setClub(formattedClub)
+      const formattedClub = {
+        id: clubData.id?.toString() ?? '',
+        name: clubData.name ?? '',
+        description: clubData.description ?? '',
+        fullDescription: (clubData as any).full_description ?? (clubData as any).fullDescription ?? '',
+        category: clubData.category ?? 'drones',
+        ageGroup: clubData.age_group ?? (clubData as any).ageGroup ?? '',
+        schedule: clubData.schedule ?? '',
+        leader: clubData.leader ?? '',
+        leaderContact: clubData.leader_contact ?? (clubData as any).leaderContact ?? '',
+        image: clubData.image ?? '',
+        logo: clubData.logo ?? '',
+        is_open: clubData.is_open ?? true,
+        capacity: clubData.capacity ?? 0,
+        materials: (clubData.materials || []).map((m: any) => ({
+          id: m.id?.toString() ?? '',
+          title: m.title ?? '',
+          url: m.url ?? '',
+          type: m.type ?? 'other',
+        })),
+        lessons: (clubData.lessons || []).map((l: any) => ({
+          id: l.id?.toString() ?? '',
+          date: l.date ?? '',
+          time: l.time ?? '',
+          topic: l.topic ?? '',
+        })),
+      } as any
+      
+      setClub(formattedClub)
 
-      // 3. Проверяем, есть ли уже заявка от этого пользователя
+      // 3. Загружаем количество подтверждённых заявок для этого клуба
+      const { count: enrollmentsCount } = await supabase
+        .from('enrollments')
+        .select('*', { count: 'exact', head: true })
+        .eq('club_id', id)
+        .eq('status', 'accepted')
+
+      setCurrentEnrollments(enrollmentsCount || 0)
+
+      // 4. Проверяем, есть ли уже заявка от этого пользователя
       if (currentUser) {
         const { data: enrollment } = await supabase
           .from('enrollments')
@@ -143,6 +155,11 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
       // Обновляем статус существующей заявки
       setExistingEnrollment({ id: 'new', status: 'pending' })
     }
+  }
+
+  const isFull = () => {
+    if (!club?.capacity || club.capacity === 0) return false
+    return currentEnrollments >= club.capacity
   }
 
   if (loading) {
@@ -291,6 +308,18 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
 
+          {/* Информация о наличии мест */}
+          <div className="rounded-lg bg-gray-50 p-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Свободных мест:</span>
+              <span className={isFull() ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                {!club.capacity || club.capacity === 0 
+                  ? 'Неограничено' 
+                  : `${Math.max(0, club.capacity - currentEnrollments)} из ${club.capacity}`}
+              </span>
+            </div>
+          </div>
+
           {/* Enrollment Success */}
           {enrollSuccess && (
             <Card className="border-green-500 bg-green-50">
@@ -384,11 +413,15 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
           {!showEnrollForm && !enrollSuccess && (
             <Button
               onClick={handleEnroll}
-              disabled={!!existingEnrollment}
+              disabled={!!existingEnrollment || !club.is_open || isFull()}
               className="w-full bg-primary text-primary-foreground"
               size="lg"
             >
-              {existingEnrollment
+              {!club.is_open
+                ? 'Набор закрыт'
+                : isFull()
+                ? 'Мест нет'
+                : existingEnrollment
                 ? 'Вы уже записаны'
                 : user
                 ? 'Записаться'

@@ -22,6 +22,13 @@ export function ClubCard({ club, compact = false }: ClubCardProps) {
           />
           <div className="absolute inset-0 rounded-t-xl bg-gradient-to-t from-black/60 to-transparent" />
 
+          {/* Метка "Набор закрыт" */}
+          {club.is_open === false && (
+            <span className="absolute right-2 top-2 z-10 rounded-full bg-red-500 px-2 py-0.5 text-xs font-medium text-white shadow-md">
+              Набор закрыт
+            </span>
+          )}
+
           {club.logo && (
             <img
               src={club.logo}

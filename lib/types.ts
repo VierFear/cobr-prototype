@@ -26,6 +26,8 @@ export interface Club {
   logo?: string
   materials?: ClubMaterialItem[]
   lessons?: ClubScheduleItem[]
+  is_open?: boolean      
+  capacity?: number
 }
 
 export interface User {

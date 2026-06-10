@@ -29,7 +29,9 @@ export default function NewClubPage() {
     leader: '',
     leaderContact: '',
     image: '',
-    logo: ''
+    logo: '',
+    is_open: true,
+    capacity: 0
   })
   const [materials, setMaterials] = useState<ClubMaterialItem[]>([])
   const [newMaterial, setNewMaterial] = useState({ title: '', url: '', type: 'youtube' as 'youtube' | 'article' | 'pdf' | 'other' })
@@ -124,6 +126,8 @@ export default function NewClubPage() {
         leader_contact: formData.leaderContact,
         image: formData.image,
         logo: formData.logo || null,
+        is_open: formData.is_open,
+        capacity: formData.capacity
       })
       .select()
       .single()
@@ -276,6 +280,37 @@ export default function NewClubPage() {
                   value={formData.logo}
                   onChange={(value) => setFormData({ ...formData, logo: value })}
                 />
+              </div>
+
+              {/* НАСТРОЙКИ НАБОРА */}
+              <div className="border-t border-border my-2 pt-3">
+                <h3 className="text-sm font-medium mb-3">Настройки набора</h3>
+                
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="checkbox"
+                    id="is_open"
+                    checked={formData.is_open}
+                    onChange={(e) => setFormData({ ...formData, is_open: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="is_open" className="text-sm">
+                    Набор в клуб открыт
+                  </label>
+                </div>
+              
+                <div>
+                  <label className="mb-1 block text-sm text-muted-foreground">
+                    Максимум учеников (0 = безлимит)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 0 })}
+                    className="w-full"
+                  />
+                </div>
               </div>
 
               <div>
