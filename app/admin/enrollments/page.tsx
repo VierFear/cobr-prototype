@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import { Spinner } from '@/components/ui/spinner'
+import { notifyEnrollmentStatusChange } from '@/lib/notifications'
 import { Clock, CheckCircle, XCircle, Phone, MessageSquare } from 'lucide-react'
 
 type EnrollmentStatus = 'pending' | 'accepted' | 'completed'
@@ -102,24 +103,40 @@ export default function AdminEnrollmentsPage() {
   }, [])
 
   const updateEnrollmentStatus = async (enrollmentId: number, newStatus: EnrollmentStatus) => {
-    const { error } = await supabase
-      .from('enrollments')
-      .update({ status: newStatus })
-      .eq('id', enrollmentId)
+  const { error } = await supabase
+    .from('enrollments')
+    .update({ status: newStatus })
+    .eq('id', enrollmentId)
+  
+  if (error) {
+    console.error('Ошибка при обновлении статуса:', error)
+    alert('Не удалось обновить статус заявки')
+  } else {
     
-    if (error) {
-      console.error('Ошибка при обновлении статуса:', error)
-      alert('Не удалось обновить статус заявки')
-    } else {
-      // Обновляем локальное состояние
-      setEnrollments(prev =>
-        prev.map(e =>
-          e.id === enrollmentId ? { ...e, status: newStatus } : e
+    const enrollment = enrollments.find(e => e.id === enrollmentId)
+    
+    if (enrollment && newStatus === 'accepted') {
+      try {
+        await notifyEnrollmentStatusChange(
+          enrollment.user_id,
+          enrollmentId,
+          enrollment.clubs?.name || 'клуб',
+          'accepted'
         )
-      )
+      } catch (notifyError) {
+        console.error('Ошибка при отправке уведомления:', notifyError)
+      }
     }
+    
+    setEnrollments(prev =>
+      prev.map(e =>
+        e.id === enrollmentId ? { ...e, status: newStatus } : e
+      )
+    )
   }
+}
 
+  
   if (loading) {
     return (
       <MobileLayout showBack backHref="/admin" title="Заявки">

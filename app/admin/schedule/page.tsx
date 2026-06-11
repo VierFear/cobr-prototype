@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Trash2, Clock } from 'lucide-react'
 
 interface Club {
   id: number
@@ -19,6 +20,7 @@ interface Lesson {
   date: string
   time: string
   topic: string
+  duration_minutes?: number
 }
 
 export default function AdminSchedulePage() {
@@ -29,23 +31,24 @@ export default function AdminSchedulePage() {
   const [clubs, setClubs] = useState<Club[]>([])
   const [clubId, setClubId] = useState<string>('')
   const [lessons, setLessons] = useState<Lesson[]>([])
-  const [lesson, setLesson] = useState({ date: '', time: '', topic: '' })
+  const [lesson, setLesson] = useState({ 
+    date: '', 
+    time: '', 
+    topic: '',
+    duration_minutes: 60 
+  })
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       
-      // 1. Получаем текущего пользователя
       const { data: { user: authUser } } = await supabase.auth.getUser()
-      
       if (!authUser) {
         setLoading(false)
         return
       }
-      
       setUser(authUser)
       
-      // 2. Проверяем, является ли пользователь админом
       const { data: userData } = await supabase
         .from('users')
         .select('is_admin')
@@ -60,7 +63,6 @@ export default function AdminSchedulePage() {
         return
       }
       
-      // 3. Получаем список клубов
       const { data: clubsData } = await supabase
         .from('clubs')
         .select('id, name')
@@ -77,7 +79,6 @@ export default function AdminSchedulePage() {
     fetchData()
   }, [])
 
-  // Загрузка расписания при смене клуба
   useEffect(() => {
     if (!clubId) return
     
@@ -104,6 +105,7 @@ export default function AdminSchedulePage() {
         date: lesson.date,
         time: lesson.time,
         topic: lesson.topic,
+        duration_minutes: lesson.duration_minutes,
       })
       .select()
       .single()
@@ -113,7 +115,7 @@ export default function AdminSchedulePage() {
       alert('Не удалось добавить занятие')
     } else {
       setLessons([...lessons, newLesson])
-      setLesson({ date: '', time: '', topic: '' })
+      setLesson({ date: '', time: '', topic: '', duration_minutes: 60 })
     }
   }
 
@@ -156,9 +158,23 @@ export default function AdminSchedulePage() {
     )
   }
 
+  // Группируем занятия по датам для красивого отображения
+  const groupedLessons = lessons.reduce((acc, lesson) => {
+    const date = lesson.date
+    if (!acc[date]) {
+      acc[date] = []
+    }
+    acc[date].push(lesson)
+    return acc
+  }, {} as Record<string, Lesson[]>)
+
+  // Сортируем даты
+  const sortedDates = Object.keys(groupedLessons).sort()
+
   return (
     <MobileLayout showBack backHref="/admin" title="Расписание">
       <div className="p-4 space-y-4">
+        {/* Выбор клуба */}
         <Card>
           <CardHeader>
             <CardTitle>Выберите клуб</CardTitle>
@@ -179,21 +195,36 @@ export default function AdminSchedulePage() {
           </CardContent>
         </Card>
 
+        {/* Форма добавления занятия */}
         <Card>
           <CardHeader>
             <CardTitle>Добавить занятие</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-2">
+          <CardContent className="space-y-3">
             <Input 
               type="date" 
               value={lesson.date} 
               onChange={(e) => setLesson({ ...lesson, date: e.target.value })} 
             />
-            <Input 
-              type="time" 
-              value={lesson.time} 
-              onChange={(e) => setLesson({ ...lesson, time: e.target.value })} 
-            />
+            <div className="flex gap-2">
+              <Input 
+                type="time" 
+                value={lesson.time} 
+                onChange={(e) => setLesson({ ...lesson, time: e.target.value })} 
+                className="flex-1"
+              />
+              <select
+                value={lesson.duration_minutes}
+                onChange={(e) => setLesson({ ...lesson, duration_minutes: parseInt(e.target.value) })}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="30">30 мин</option>
+                <option value="45">45 мин</option>
+                <option value="60">1 час</option>
+                <option value="90">1.5 часа</option>
+                <option value="120">2 часа</option>
+              </select>
+            </div>
             <Input 
               placeholder="Тема занятия" 
               value={lesson.topic} 
@@ -203,27 +234,62 @@ export default function AdminSchedulePage() {
           </CardContent>
         </Card>
 
+        {/* Список занятий с группировкой по датам */}
         <Card>
           <CardHeader>
             <CardTitle>Текущее расписание</CardTitle>
           </CardHeader>
           <CardContent>
-            {lessons.length > 0 ? (
-              <ul className="space-y-2">
-                {lessons.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between rounded border border-border p-2">
-                    <div>
-                      <p className="text-sm font-medium">{item.date} • {item.time}</p>
-                      <p className="text-xs text-muted-foreground">{item.topic}</p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => removeLesson(item.id)}>
-                      Удалить
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
+            {lessons.length === 0 ? (
               <p className="text-sm text-muted-foreground">Расписание не задано.</p>
+            ) : (
+              <div className="space-y-4">
+                {sortedDates.map((date) => {
+                  const dateObj = new Date(date)
+                  const today = new Date()
+                  today.setHours(0, 0, 0, 0)
+                  const isPast = dateObj < today
+                  
+                  return (
+                    <div key={date}>
+                      <h4 className={`mb-2 text-sm font-medium ${isPast ? 'text-muted-foreground' : 'text-foreground'}`}>
+                        {dateObj.toLocaleDateString('ru-RU', { 
+                          weekday: 'long', 
+                          day: 'numeric', 
+                          month: 'long' 
+                        })}
+                        {isPast && <span className="ml-2 text-xs text-muted-foreground">(прошло)</span>}
+                      </h4>
+                      <div className="space-y-2">
+                        {groupedLessons[date].map((item) => (
+                          <div key={item.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-3 w-3 text-muted-foreground" />
+                                <p className="text-sm font-medium">{item.time}</p>
+                                {item.duration_minutes && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ({item.duration_minutes} мин)
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-sm">{item.topic}</p>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeLesson(item.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

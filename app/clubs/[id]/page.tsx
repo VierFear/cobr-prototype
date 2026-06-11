@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { notifyNewEnrollmentToAdmin } from '@/lib/notifications'
 import { supabase } from '@/lib/supabase'
 import { Calendar, User, Phone, Package, CheckCircle } from 'lucide-react'
 import type { Club } from '@/lib/types'
@@ -130,31 +131,50 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const handleSubmitEnrollment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user) return
+  e.preventDefault()
+  if (!user) return
 
-    const { error } = await supabase
-      .from('enrollments')
-      .insert([
-        {
-          user_id: user.id,
-          club_id: parseInt(id),
-          child_name: formData.childName,
-          child_age: parseInt(formData.childAge),
-          parent_phone: formData.parentPhone,
-          comment: formData.comment,
-          status: 'pending',
-        },
-      ])
+  const { data: newEnrollment, error } = await supabase
+    .from('enrollments')
+    .insert([
+      {
+        user_id: user.id,
+        club_id: parseInt(id),
+        child_name: formData.childName,
+        child_age: parseInt(formData.childAge),
+        parent_phone: formData.parentPhone,
+        comment: formData.comment,
+        status: 'pending',
+      },
+    ])
+    .select()
+    .single()
 
-    if (error) {
-      console.error('Ошибка при записи:', error)
-    } else {
-      setEnrollSuccess(true)
-      setShowEnrollForm(false)
-      // Обновляем статус существующей заявки
-      setExistingEnrollment({ id: 'new', status: 'pending' })
+  if (error) {
+    console.error('Ошибка при записи:', error)
+  } else {
+    // Получаем ID админа (первого админа в системе)
+    const { data: adminData } = await supabase
+      .from('users')
+      .select('id')
+      .eq('is_admin', true)
+      .limit(1)
+      .single()
+
+    if (adminData && newEnrollment) {
+      await notifyNewEnrollmentToAdmin(
+        adminData.id,
+        newEnrollment.id,
+        formData.childName,
+        club?.name || 'клуб'
+      )
     }
+
+    setEnrollSuccess(true)
+    setShowEnrollForm(false)
+    // Обновляем статус существующей заявки
+    setExistingEnrollment({ id: 'new', status: 'pending' })
+   }
   }
 
   const isFull = () => {
@@ -271,40 +291,260 @@ export default function ClubDetailPage({ params }: { params: Promise<{ id: strin
               )}
 
               {activeTab === 'schedule' && (
-                <div>
-                  {(club.lessons && club.lessons.length > 0) ? (
-                    <ul className="space-y-2">
-                      {club.lessons.map((lesson) => (
-                        <li key={lesson.id} className="rounded border border-border p-3">
-                          <p className="text-sm font-medium">{lesson.date} • {lesson.time}</p>
-                          <p className="text-xs text-muted-foreground">{lesson.topic}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Занятия ещё не добавлены.</p>
-                  )}
-                </div>
+  <div>
+    {(!club.lessons || club.lessons.length === 0) ? (
+      <p className="text-sm text-muted-foreground">Занятия ещё не добавлены.</p>
+    ) : (
+      (() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        
+        const grouped = {
+          past: [] as any[],
+          today: [] as any[],
+          tomorrow: [] as any[],
+          future: [] as any[]
+        }
+        
+        club.lessons.forEach((lesson: any) => {
+          const lessonDate = new Date(lesson.date)
+          lessonDate.setHours(0, 0, 0, 0)
+          
+          if (lessonDate < today) {
+            grouped.past.push(lesson)
+          } else if (lessonDate.getTime() === today.getTime()) {
+            grouped.today.push(lesson)
+          } else if (lessonDate.getTime() === tomorrow.getTime()) {
+            grouped.tomorrow.push(lesson)
+          } else {
+            grouped.future.push(lesson)
+          }
+        })
+        
+        grouped.future.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        
+        const hasActiveLessons = grouped.today.length > 0 || grouped.tomorrow.length > 0 || grouped.future.length > 0
+        
+        return (
+          <div className="space-y-4">
+            {/* Счётчик занятий */}
+            <div className="flex flex-wrap gap-2">
+              {grouped.today.length > 0 && (
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                  Сегодня: {grouped.today.length}
+                </span>
               )}
+              {grouped.tomorrow.length > 0 && (
+                <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700">
+                  Завтра: {grouped.tomorrow.length}
+                </span>
+              )}
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-muted-foreground">
+                Всего: {club.lessons.length}
+              </span>
+            </div>
+            
+            {/* СЕГОДНЯ */}
+            {grouped.today.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-medium text-green-600">Сегодня</h4>
+                <div className="space-y-2">
+                  {grouped.today.map((lesson: any) => (
+                    <div key={lesson.id} className="rounded-lg border border-green-200 bg-green-50/30 p-3">
+                      <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{lesson.topic}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {lesson.duration_minutes && lesson.time && !lesson.time.includes('-')
+                          ? (() => {
+                              const [hours, minutes] = lesson.time.split(':').map(Number)
+                              const end = new Date(0, 0, 0, hours, (minutes || 0) + lesson.duration_minutes)
+                              const endTime = `${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`
+                              return `${lesson.time} → ${endTime}`
+                            })()
+                          : lesson.time}
+                      </span>
+                    </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(lesson.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* ЗАВТРА */}
+            {grouped.tomorrow.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-medium text-yellow-600">Завтра</h4>
+                <div className="space-y-2">
+                  {grouped.tomorrow.map((lesson: any) => (
+                    <div key={lesson.id} className="rounded-lg border border-yellow-200 bg-yellow-50/30 p-3">
+                      <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{lesson.topic}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {lesson.duration_minutes && lesson.time && !lesson.time.includes('-')
+                          ? (() => {
+                              const [hours, minutes] = lesson.time.split(':').map(Number)
+                              const end = new Date(0, 0, 0, hours, (minutes || 0) + lesson.duration_minutes)
+                              const endTime = `${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`
+                              return `${lesson.time} → ${endTime}`
+                            })()
+                          : lesson.time}
+                      </span>
+                    </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(lesson.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* БУДУЩИЕ ЗАНЯТИЯ */}
+            {grouped.future.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-medium text-blue-600">Ближайшие занятия</h4>
+                <div className="space-y-2">
+                  {grouped.future.map((lesson: any) => (
+                    <div key={lesson.id} className="rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{lesson.topic}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {lesson.duration_minutes && lesson.time && !lesson.time.includes('-')
+                          ? (() => {
+                              const [hours, minutes] = lesson.time.split(':').map(Number)
+                              const end = new Date(0, 0, 0, hours, (minutes || 0) + lesson.duration_minutes)
+                              const endTime = `${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`
+                              return `${lesson.time} → ${endTime}`
+                            })()
+                          : lesson.time}
+                      </span>
+                    </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(lesson.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* ПРОШЕДШИЕ ЗАНЯТИЯ */}
+            {grouped.past.length > 0 && (
+              <details className="group">
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                  Прошедшие занятия ({grouped.past.length})
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {grouped.past.map((lesson: any) => (
+                    <div key={lesson.id} className="rounded-lg border border-border bg-muted/30 p-3 opacity-60">
+                      <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{lesson.topic}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {lesson.duration_minutes && lesson.time && !lesson.time.includes('-')
+                          ? (() => {
+                              const [hours, minutes] = lesson.time.split(':').map(Number)
+                              const end = new Date(0, 0, 0, hours, (minutes || 0) + lesson.duration_minutes)
+                              const endTime = `${end.getHours().toString().padStart(2, '0')}:${end.getMinutes().toString().padStart(2, '0')}`
+                              return `${lesson.time} → ${endTime}`
+                            })()
+                          : lesson.time}
+                      </span>
+                    </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(lesson.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            
+            {!hasActiveLessons && grouped.past.length > 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+                Активных занятий нет
+              </div>
+            )}
+          </div>
+        )
+      })()
+    )}
+  </div>
+)}
 
               {activeTab === 'materials' && (
-                <div>
-                  {(club.materials && club.materials.length > 0) ? (
-                    <ul className="space-y-2">
-                      {club.materials.map((material) => (
-                        <li key={material.id} className="rounded border border-border p-3">
-                          <a href={material.url} target="_blank" rel="noreferrer" className="text-sm text-primary underline">
-                            {material.title}
-                          </a>
-                          <p className="text-xs text-muted-foreground">{material.type ?? 'other'}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Материалы пока не добавлены.</p>
-                  )}
+            <div>
+              {(club.materials && club.materials.length > 0) ? (
+                <div className="space-y-3">
+                  {club.materials.map((material) => {
+                    // Определяем иконку по типу или URL
+                    const getIcon = () => {
+                      if (material.type === 'youtube' || material.url?.includes('youtube.com') || material.url?.includes('youtu.be')) {
+                        return '📺'
+                      }
+                      if (material.type === 'pdf' || material.url?.endsWith('.pdf')) {
+                        return '📄'
+                      }
+                      if (material.type === 'article') {
+                        return '📖'
+                      }
+                      return '🔗'
+                    }
+          
+                    // Определяем цвет фона по типу
+                    const getBgColor = () => {
+                      if (material.type === 'youtube' || material.url?.includes('youtube.com')) {
+                        return 'bg-red-50 border-red-200'
+                      }
+                      if (material.type === 'pdf' || material.url?.endsWith('.pdf')) {
+                        return 'bg-blue-50 border-blue-200'
+                      }
+                      if (material.type === 'article') {
+                        return 'bg-green-50 border-green-200'
+                      }
+                      return 'bg-gray-50 border-gray-200'
+                    }
+          
+                    // Определяем текст кнопки
+                    const getButtonText = () => {
+                      if (material.type === 'youtube') return 'Смотреть на YouTube'
+                      if (material.type === 'pdf') return 'Открыть PDF'
+                      if (material.type === 'article') return 'Читать статью'
+                      return 'Перейти по ссылке'
+                    }
+          
+                    return (
+                      <a
+                        key={material.id}
+                        href={material.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`block rounded-lg border p-4 transition-all hover:shadow-md ${getBgColor()}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-2xl">{getIcon()}</div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-foreground">{material.title}</h4>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {getButtonText()}
+                            </p>
+                          </div>
+                          <div className="text-muted-foreground">→</div>
+                        </div>
+                      </a>
+                    )
+                  })}
                 </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Материалы пока не добавлены.</p>
               )}
+            </div>
+          )}
             </CardContent>
           </Card>
 

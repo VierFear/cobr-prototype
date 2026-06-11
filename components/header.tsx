@@ -1,10 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, User, Shield } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { Notifications } from './notifications'
 
 interface HeaderProps {
   title?: string
@@ -13,9 +15,26 @@ interface HeaderProps {
 }
 
 export function Header({ title, showBack = false, backHref = '/' }: HeaderProps) {
+  const pathname = usePathname()
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [avatar, setAvatar] = useState<string | null>(null)
+
+  // Страницы, где ПОКАЗЫВАЕМ колокольчик
+  const showNotificationPaths = [
+    '/',
+    '/profile',
+    '/about',
+    '/clubs',               
+    '/profile/edit',        
+  ]
+
+  const isClubDetailPage = pathname?.startsWith('/clubs/') && pathname !== '/clubs'
+  
+  const shouldShowNotifications = isLoggedIn && 
+    !isClubDetailPage && 
+    showNotificationPaths.includes(pathname)
+
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -82,7 +101,10 @@ export function Header({ title, showBack = false, backHref = '/' }: HeaderProps)
           </h1>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* Уведомления — только на разрешённых страницах */}
+          {shouldShowNotifications && <Notifications />}
+
           {isAdmin && (
             <Link href="/admin">
               <Button variant="ghost" size="icon" className="text-primary">

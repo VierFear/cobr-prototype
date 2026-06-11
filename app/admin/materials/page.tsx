@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Trash } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface Club {
@@ -209,28 +210,76 @@ export default function AdminMaterialsPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Текущие материалы</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {materials.length > 0 ? (
-              <ul className="space-y-2">
-                {materials.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between rounded border border-border p-2">
-                    <a href={item.url} target="_blank" rel="noreferrer" className="text-sm text-primary underline">
-                      {item.title}
-                    </a>
-                    <Button variant="ghost" size="icon" onClick={() => removeMaterial(item.id)}>
-                      Удалить
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">Материалы не добавлены.</p>
-            )}
-          </CardContent>
-        </Card>
+  <CardHeader>
+    <CardTitle>Текущие материалы</CardTitle>
+  </CardHeader>
+  <CardContent>
+    {materials.length > 0 ? (
+      <div className="space-y-2">
+        {materials.map((item) => {
+          const getIcon = () => {
+            if (item.type === 'youtube') return '📺'
+            if (item.type === 'pdf') return '📄'
+            if (item.type === 'article') return '📖'
+            return '🔗'
+          }
+
+          const getBgColor = () => {
+            if (item.type === 'youtube') return 'bg-red-50 border-red-200'
+            if (item.type === 'pdf') return 'bg-blue-50 border-blue-200'
+            if (item.type === 'article') return 'bg-green-50 border-green-200'
+            return 'bg-gray-50 border-gray-200'
+          }
+
+          const getTypeText = () => {
+            if (item.type === 'youtube') return 'YouTube'
+            if (item.type === 'pdf') return 'PDF'
+            if (item.type === 'article') return 'Статья'
+            return 'Ссылка'
+          }
+
+          return (
+            <div
+              key={item.id}
+              className={`rounded-lg border p-3 ${getBgColor()}`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 text-xl">{getIcon()}</span>
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-sm font-medium text-primary hover:underline truncate"
+                  >
+                    {item.title}
+                  </a>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-xs text-muted-foreground">{getTypeText()}</span>
+                    <span className="text-xs text-muted-foreground">•</span>
+                    <span className="text-xs text-muted-foreground break-all">
+                      {item.url.length > 50 ? item.url.slice(0, 50) + '...' : item.url}
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeMaterial(item.id)}
+                  className="shrink-0 text-destructive hover:text-destructive"
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    ) : (
+      <p className="text-sm text-muted-foreground">Материалы не добавлены.</p>
+    )}
+  </CardContent>
+</Card>
 
         <Button variant="outline" onClick={() => router.push('/admin')} className="w-full">
           Назад в админку
