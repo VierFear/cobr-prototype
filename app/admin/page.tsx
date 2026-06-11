@@ -217,6 +217,13 @@ export default function AdminPage() {
                 )}
               </Button>
             </Link>
+            <Link href="/admin/students">
+              <Button variant="outline" className="w-full justify-start">
+                <Users className="mr-2 h-4 w-4 text-primary" />
+                Ученики
+                <span className="ml-auto text-xs text-muted-foreground">список</span>
+              </Button>
+            </Link>
             <Link href="/admin/schedule">
               <Button variant="outline" className="w-full justify-start">
                 <Clock className="mr-2 h-4 w-4 text-primary" />

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ImageUpload } from '@/components/image-upload'
 import { supabase } from '@/lib/supabase'
 
 export default function ProfileEditPage() {
@@ -94,10 +95,12 @@ export default function ProfileEditPage() {
     
     if (error) {
       console.error('Ошибка при сохранении:', error)
+      alert('Ошибка при сохранении профиля')
+    } else {
+      router.push('/profile')
     }
     
     setIsSaving(false)
-    router.push('/profile')
   }
 
   return (
@@ -109,23 +112,14 @@ export default function ProfileEditPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              {/* Avatar Preview */}
-              <div className="flex flex-col items-center gap-2">
-                <img
-                  src={formData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-                  alt={formData.name || 'Аватар'}
-                  className="h-24 w-24 rounded-full object-cover"
-                />
-              </div>
-
+              {/* Avatar Upload - теперь через ImageUpload */}
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">
-                  URL аватара
+                  Аватар
                 </label>
-                <Input
+                <ImageUpload
                   value={formData.avatar}
-                  onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-                  placeholder="https://..."
+                  onChange={(value) => setFormData({ ...formData, avatar: value })}
                 />
               </div>
 

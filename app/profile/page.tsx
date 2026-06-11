@@ -144,7 +144,7 @@ export default function ProfilePage() {
   // Данные для отображения (из Auth или из таблицы users)
   const displayName = userProfile?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Пользователь'
   const displayPhone = userProfile?.phone || user.user_metadata?.phone || 'Не указан'
-  const displayAvatar = userProfile?.avatar || user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0057B8&color=fff`
+  const displayAvatar = userProfile?.avatar || ''
   const displayBio = userProfile?.bio || ''
 
   return (
@@ -154,11 +154,17 @@ export default function ProfilePage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
+              {displayAvatar ? (
               <img
                 src={displayAvatar}
                 alt={displayName}
                 className="h-20 w-20 rounded-full object-cover"
               />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-white">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
               <div className="flex-1">
                 <div className="flex items-start justify-between">
                   <h2 className="text-xl font-semibold text-foreground">{displayName}</h2>
