@@ -313,61 +313,6 @@ export default function NewClubPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-sm text-muted-foreground">
-                  Учебные материалы
-                </label>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <Input
-                    value={newMaterial.title}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, title: e.target.value })}
-                    placeholder="Название"
-                  />
-                  <Input
-                    value={newMaterial.url}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, url: e.target.value })}
-                    placeholder="Ссылка"
-                  />
-                  <select
-                    value={newMaterial.type}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value as any })}
-                    className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="youtube">YouTube</option>
-                    <option value="article">Статья</option>
-                    <option value="pdf">PDF</option>
-                    <option value="other">Другое</option>
-                  </select>
-                  <Button type="button" variant="outline" onClick={addMaterial}>
-                    <Plus className="h-4 w-4" />
-                    Добавить материал
-                  </Button>
-                </div>
-                {materials.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1">
-                    {materials.map((material, index) => (
-                      <div key={material.id} className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-1.5 text-sm">
-                        <div className="flex-1">
-                          <p className="font-medium">{material.title}</p>
-                          <a href={material.url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
-                            {material.url}
-                          </a>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => removeMaterial(index)}
-                        >
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="flex gap-2">
                 <Button
                   type="button"

@@ -26,10 +26,10 @@ export function Header({ title, showBack = false, backHref = '/' }: HeaderProps)
     '/profile',
     '/about',
     '/clubs',               
-    '/profile/edit',        
+    '/profile',        
   ]
 
-  const isClubDetailPage = pathname?.startsWith('/clubs/') && pathname !== '/clubs'
+  const isClubDetailPage = pathname?.startsWith('/clubs/') && pathname !== '/clubs';
   
   const shouldShowNotifications = isLoggedIn && 
     !isClubDetailPage && 

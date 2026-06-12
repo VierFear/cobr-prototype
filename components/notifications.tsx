@@ -174,14 +174,14 @@ export function Notifications() {
 
       {isOpen && (
   <>
-    {/* Затемняющий фон для мобильных */}
+    {/* Затемняющий фон */}
     <div 
-      className="fixed inset-0 z-40 bg-black/50 md:hidden"
+      className="fixed inset-0 z-40 bg-black/50"
       onClick={() => setIsOpen(false)}
     />
     
-    {/* Выпадающее окно */}
-    <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-lg border border-border bg-card shadow-lg md:right-0 md:left-auto md:w-80">
+    {/* Центрированное окно */}
+    <div className="fixed left-1/2 top-1/2 z-50 w-[90%] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-card shadow-lg">
       <div className="flex items-center justify-between border-b border-border p-3">
         <h3 className="font-semibold">Уведомления</h3>
         {unreadCount > 0 && (
@@ -211,20 +211,20 @@ export function Notifications() {
             <div
               key={notif.id}
               className={cn(
-                "group relative border-b border-border p-3 transition-colors hover:bg-muted/50",
+                "relative border-b border-border p-3 transition-colors hover:bg-muted/50",
                 !notif.is_read && "bg-primary/5"
               )}
             >
               <div className="flex gap-2">
-                <div className="text-lg">{getTypeIcon(notif.type)}</div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{notif.title}</p>
-                    <span className="text-xs text-muted-foreground">
+                <div className="shrink-0 text-lg">{getTypeIcon(notif.type)}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium truncate">{notif.title}</p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
                       {getTimeAgo(notif.created_at)}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-xs text-muted-foreground break-words">
                     {notif.message}
                   </p>
                   {notif.link && (
@@ -242,7 +242,7 @@ export function Notifications() {
                 </div>
                 <button
                   onClick={() => deleteNotification(notif.id)}
-                  className="absolute right-2 top-2 hidden rounded p-0.5 text-muted-foreground hover:bg-muted group-hover:block"
+                  className="shrink-0 self-start rounded p-0.5 text-muted-foreground hover:bg-muted"
                 >
                   <X className="h-3 w-3" />
                 </button>
