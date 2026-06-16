@@ -21,10 +21,25 @@ export default function ClubsPage() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<CategoryFilter>('all')
   const [loading, setLoading] = useState(true)
+  const [ageFilter, setAgeFilter] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<'name' | 'popular'>('name')
+  const [showFilters, setShowFilters] = useState(false)
+  const [enrollmentsCount, setEnrollmentsCount] = useState<Record<number, number>>({})
+
+  // Получаем уникальные возрастные группы из клубов
+  const ageGroups = useMemo(() => {
+    const groups = new Set<string>()
+    clubs.forEach(club => {
+      if (club.ageGroup) groups.add(club.ageGroup)
+    })
+    return ['all', ...Array.from(groups)]
+  }, [clubs])
 
   useEffect(() => {
     const fetchClubs = async () => {
       setLoading(true)
+      
+      // Загружаем клубы
       const { data, error } = await supabase
         .from('clubs')
         .select('*')
@@ -33,26 +48,39 @@ export default function ClubsPage() {
         console.error('Ошибка загрузки клубов:', error)
         setClubs([])
       } else {
-              // Безопасное преобразование snake_case → camelCase
         const formattedClubs = (data || []).map((club: any) => ({
-        id: String(club.id),
-        name: club.name || '',
-        description: club.description || '',
-        fullDescription: club.full_description || '',
-        category: club.category || 'drones',
-        ageGroup: club.age_group || '',
-        schedule: club.schedule || '',
-        leader: club.leader || '',
-        leaderContact: club.leader_contact || '',
-        image: club.image || '',
-        logo: club.logo || '',
-        materials: club.materials || [],
-        lessons: club.lessons || [],
-      })) as any
-      
-      setClubs(formattedClubs)
-      console.log('clubs data:', clubs)
+          id: String(club.id),
+          name: club.name || '',
+          description: club.description || '',
+          fullDescription: club.full_description || '',
+          category: club.category || 'drones',
+          ageGroup: club.age_group || '',
+          schedule: club.schedule || '',
+          leader: club.leader || '',
+          leaderContact: club.leader_contact || '',
+          image: club.image || '',
+          logo: club.logo || '',
+          is_open: club.is_open ?? true,
+          capacity: club.capacity ?? 0,
+          materials: club.materials || [],
+          lessons: club.lessons || [],
+        })) as any
+        
+        setClubs(formattedClubs)
       }
+
+      // Загружаем количество заявок для сортировки по популярности
+      const { data: enrollmentsData } = await supabase
+        .from('enrollments')
+        .select('club_id')
+        .neq('status', 'completed')
+
+      const counts: Record<number, number> = {}
+      enrollmentsData?.forEach((e: any) => {
+        counts[e.club_id] = (counts[e.club_id] || 0) + 1
+      })
+      setEnrollmentsCount(counts)
+      
       setLoading(false)
     }
 
@@ -60,13 +88,28 @@ export default function ClubsPage() {
   }, [])
 
   const filteredClubs = useMemo(() => {
-    return clubs.filter((club) => {
+    let result = clubs.filter((club) => {
       const matchesSearch = club.name.toLowerCase().includes(search.toLowerCase()) ||
         club.description.toLowerCase().includes(search.toLowerCase())
       const matchesCategory = category === 'all' || club.category === category
-      return matchesSearch && matchesCategory
+      const matchesAge = ageFilter === 'all' || club.ageGroup === ageFilter
+      return matchesSearch && matchesCategory && matchesAge
     })
-  }, [clubs, search, category])
+
+    // Сортировка
+    if (sortBy === 'name') {
+      result = [...result].sort((a, b) => a.name.localeCompare(b.name))
+    } else {
+      // По популярности (количество записей)
+      result = [...result].sort((a, b) => {
+        const countA = enrollmentsCount[parseInt(a.id)] || 0
+        const countB = enrollmentsCount[parseInt(b.id)] || 0
+        return countB - countA
+      })
+    }
+
+    return result
+  }, [clubs, search, category, ageFilter, sortBy, enrollmentsCount])
 
   if (loading) {
     return (
@@ -91,7 +134,12 @@ export default function ClubsPage() {
               className="pl-9"
             />
           </div>
-          <Button variant="outline" size="icon" className="shrink-0">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="shrink-0"
+            onClick={() => setShowFilters(!showFilters)}
+          >
             <SlidersHorizontal className="h-4 w-4" />
             <span className="sr-only">Фильтры</span>
           </Button>
@@ -115,6 +163,55 @@ export default function ClubsPage() {
           ))}
         </div>
 
+        {/* Панель фильтров */}
+        {showFilters && (
+          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+            {/* Возрастной фильтр */}
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Возрастная группа</label>
+              <select
+                value={ageFilter}
+                onChange={(e) => setAgeFilter(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="all">Все возрасты</option>
+                {ageGroups.filter(g => g !== 'all').map((group) => (
+                  <option key={group} value={group}>{group}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Сортировка */}
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Сортировка</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'name' | 'popular')}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="name">По названию</option>
+                <option value="popular">По популярности</option>
+              </select>
+            </div>
+
+            {/* Кнопка сброса фильтров */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+              onClick={() => {
+                setAgeFilter('all')
+                setSortBy('name')
+                setSearch('')
+                setCategory('all')
+                setShowFilters(false)
+              }}
+            >
+              Сбросить все фильтры
+            </Button>
+          </div>
+        )}
+
         <p className="text-sm text-muted-foreground">
           Найдено: {filteredClubs.length} {filteredClubs.length === 1 ? 'клуб' : 'клубов'}
         </p>
@@ -129,7 +226,12 @@ export default function ClubsPage() {
               <p className="text-muted-foreground">Клубы не найдены</p>
               <Button 
                 variant="link" 
-                onClick={() => { setSearch(''); setCategory('all'); }}
+                onClick={() => { 
+                  setSearch('')
+                  setCategory('all')
+                  setAgeFilter('all')
+                  setSortBy('name')
+                }}
                 className="mt-2 text-primary"
               >
                 Сбросить фильтры
@@ -140,5 +242,4 @@ export default function ClubsPage() {
       </div>
     </MobileLayout>
   )
-  
 }
